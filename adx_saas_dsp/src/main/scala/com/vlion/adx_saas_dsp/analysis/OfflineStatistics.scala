@@ -45,7 +45,7 @@ object OfflineStatistics {
                |    (
                |        select
                |        *,
-               |        row_number() over(partition by logtype order by `time` desc) as r_n -- 每种日志分区,取最大的
+               |        row_number() over(partition by logtype,admaster_id,plan_id order by `time` desc) as r_n -- 每种日志分区,取最大的
                |        from ods.ods_dsp_info
                |        where  etl_date='${etlDate}' and etl_hour='${etlHour}' and logtype !='10'
                |    ) t
