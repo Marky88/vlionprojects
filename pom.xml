@@ -11,6 +11,7 @@
         <module>adx_saas_dsp</module>
         <module>ssp</module>
         <module>simple_ssp_web</module>
+        <module>telecom</module>
     </modules>
     <packaging>pom</packaging>
     <properties>

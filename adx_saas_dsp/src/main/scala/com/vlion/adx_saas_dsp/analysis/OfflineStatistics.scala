@@ -36,7 +36,7 @@ object OfflineStatistics {
                |    count(if(logtype='11',1,null)) as plan_bid_count, -- 计划出价次数
                |    count(if(logtype='12',1,null)) as inner_win_count, -- 赢得内部竞价次数
                |    count(if(logtype='13',1,null)) as outer_bid_succ_count, -- 外部竞价成功次数
-               |    0 as outer_bid_fail_count,  -- 外部竞价失败次数
+               |    count(if(logtype='16',1,null)) as outer_bid_fail_count,  -- 外部竞价失败次数
                |    count(if(logtype='14',1,null)) as imp_count,  -- 曝光次数
                |    sum(if(logtype='14',win_price,0)) as real_cost,  -- 实际消耗
                |    count(if(logtype='15',logtype,null)) as clk_count,  -- 点击次数
@@ -47,7 +47,7 @@ object OfflineStatistics {
                |        *,
                |        row_number() over(partition by logtype order by `time` desc) as r_n -- 每种日志分区,取最大的
                |        from ods.ods_dsp_info
-               |        where  etl_date='${etlDate}' and etl_hour='${etlHour}'
+               |        where  etl_date='${etlDate}' and etl_hour='${etlHour}' and logtype !='10'
                |    ) t
                |group by
                |    admaster_id,plan_id
