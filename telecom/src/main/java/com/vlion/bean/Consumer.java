@@ -6,11 +6,14 @@ import java.sql.Timestamp;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import lombok.ToString;
 
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
+@ToString
 public class Consumer implements Serializable {
+    // 316日志
     private String orderId; //订单id
     private String templateId;//入口模版
     private String cartNo; //入网身份证
@@ -20,7 +23,10 @@ public class Consumer implements Serializable {
     private String receiverCity; // 收货人所在市
     private String receiverDistrict; // 收货人所在区
     private String receiverAddress;// 收货人详细地址
+    private String planId; // 广告计划id
+    private String creativeId;// 广告创意id
+    private String comboType; // 套餐类型
+    private String isChooseNum; // 是否选号
     private Long time; // 时间戳
     private Timestamp date;//日期
-
 }
