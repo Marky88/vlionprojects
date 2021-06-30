@@ -9,10 +9,7 @@ import org.apache.flink.configuration.Configuration;
 import org.apache.flink.streaming.api.functions.sink.RichSinkFunction;
 import org.apache.flink.streaming.api.functions.sink.SinkFunction;
 
-import java.sql.Connection;
-import java.sql.DriverManager;
-import java.sql.PreparedStatement;
-import java.sql.Statement;
+import java.sql.*;
 
 /**
  * @description:
@@ -25,11 +22,28 @@ public class MysqlSinkAgg extends RichSinkFunction<Tuple2<Tuple4<String, String,
 
     @Override
     public void open(Configuration parameters) throws Exception {
+        Class.forName(PropertiesUtils.getString("driver"));
         conn = DriverManager.getConnection(PropertiesUtils.getString("url"),
                 PropertiesUtils.getString("username"), PropertiesUtils.getString("password")
         );
         //这个表，（每小时+每个状态码+h5模板）统计一条数据入库
         psIntendUser = conn.prepareStatement("replace into intend_user(template_id,code,msg,pv,`time`) values(?,?,?,?,?)"); // 5个
+
+        //防止超8小时连接断开
+        new Thread(() -> {
+            while(true){
+                try {
+                    ResultSet resultSet = conn.prepareStatement("select 1").executeQuery();
+                } catch (SQLException throwables) {
+                    throwables.printStackTrace();
+                }
+                try {
+                    Thread.sleep(14400000);
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
+            }
+        }).start();
 
     }
 

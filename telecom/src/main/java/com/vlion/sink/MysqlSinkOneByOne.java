@@ -7,10 +7,7 @@ import org.apache.flink.api.java.tuple.Tuple2;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.streaming.api.functions.sink.RichSinkFunction;
 
-import java.sql.Connection;
-import java.sql.DriverManager;
-import java.sql.PreparedStatement;
-import java.sql.Statement;
+import java.sql.*;
 
 /**
  * @description:
@@ -86,7 +83,7 @@ public class MysqlSinkOneByOne extends RichSinkFunction<Tuple2<String, Object>> 
 
     @Override
     public void open(Configuration parameters) throws Exception {
-//        Class.forName(PropertiesUtils.getString("driver"));
+        Class.forName(PropertiesUtils.getString("driver"));
         conn = DriverManager.getConnection(PropertiesUtils.getString("url"),
                 PropertiesUtils.getString("username"), PropertiesUtils.getString("password")
         );
@@ -101,6 +98,23 @@ public class MysqlSinkOneByOne extends RichSinkFunction<Tuple2<String, Object>> 
                 "order_status,other_status,active_time,send_no,logistics_name,logistics_status,order_status_desc,is_last_invest," +
                 "last_invest_time,is_invest,invest_time,etype" +
                 ") values (?,?,?,?,?,?,?,?,?,?,?,?,?)"); // 13个?
+
+        //防止超8小时连接断开
+        new Thread(() -> {
+            while(true){
+                try {
+                    ResultSet resultSet = conn.prepareStatement("select 1").executeQuery();
+                } catch (SQLException throwables) {
+                    throwables.printStackTrace();
+                }
+                try {
+                    Thread.sleep(14400000);
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
+            }
+        }).start();
+
     }
 
     @Override

@@ -68,29 +68,34 @@ public class RealTimeTask {
                         String receiverAddress = arr[11];
                         String planId = arr[12];
                         String creativeId = arr[13];
-                        String comboType = arr[17] ;// 套餐类型
+                        String comboType = arr[17];// 套餐类型
                         String isChooseNum = null; // 是否选号,预留
                         Long time = null;
-                        if(arr[1]!=null && !arr[1].equals("")) time=Long.parseLong(arr[1]);// 时间戳
+                        if (arr[1] != null && !arr[1].equals("")) time = Long.parseLong(arr[1]);// 时间戳
 
                         // 获取
 //                        SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd hh:mm:ss");
 //                        Date date = sdf.parse(sdf.format(time * 1000));
                         Consumer consumer = new Consumer();
-                        if(!(orderId== null || orderId.trim().equals(""))) consumer.setOrderId(orderId);
-                        if(!(templateId== null || templateId.trim().equals(""))) consumer.setTemplateId(templateId);
-                        if(!(cartNo== null || cartNo.trim().equals(""))) consumer.setCartNo(cartNo);
-                        if(!(buyerName== null || buyerName.trim().equals(""))) consumer.setBuyerName(buyerName);
-                        if(!(mobilePhone== null || mobilePhone.trim().equals(""))) consumer.setMobilePhone(mobilePhone);
-                        if(!(receiverProv== null || receiverProv.trim().equals(""))) consumer.setReceiverProv(receiverProv);
-                        if(!(receiverCity== null || receiverCity.trim().equals(""))) consumer.setReceiverCity(receiverCity);
-                        if(!(receiverDistrict== null || receiverDistrict.trim().equals(""))) consumer.setReceiverDistrict(receiverDistrict);
-                        if(!(receiverAddress== null || receiverAddress.trim().equals(""))) consumer.setReceiverAddress(receiverAddress);
-                        if(!(planId== null || planId.trim().equals(""))) consumer.setPlanId(planId);
-                        if(!(creativeId== null || creativeId.trim().equals(""))) consumer.setCreativeId(creativeId);
-                        if(!(comboType == null || comboType.trim().equals(""))) consumer.setComboType(comboType);
-                        if(time != null) consumer.setTime(time);
-                        if(time!=null ) consumer.setDate(new Timestamp(time * 1000)); // 日期
+                        if (!(orderId == null || orderId.trim().equals(""))) consumer.setOrderId(orderId);
+                        if (!(templateId == null || templateId.trim().equals(""))) consumer.setTemplateId(templateId);
+                        if (!(cartNo == null || cartNo.trim().equals(""))) consumer.setCartNo(cartNo);
+                        if (!(buyerName == null || buyerName.trim().equals(""))) consumer.setBuyerName(buyerName);
+                        if (!(mobilePhone == null || mobilePhone.trim().equals("")))
+                            consumer.setMobilePhone(mobilePhone);
+                        if (!(receiverProv == null || receiverProv.trim().equals("")))
+                            consumer.setReceiverProv(receiverProv);
+                        if (!(receiverCity == null || receiverCity.trim().equals("")))
+                            consumer.setReceiverCity(receiverCity);
+                        if (!(receiverDistrict == null || receiverDistrict.trim().equals("")))
+                            consumer.setReceiverDistrict(receiverDistrict);
+                        if (!(receiverAddress == null || receiverAddress.trim().equals("")))
+                            consumer.setReceiverAddress(receiverAddress);
+                        if (!(planId == null || planId.trim().equals(""))) consumer.setPlanId(planId);
+                        if (!(creativeId == null || creativeId.trim().equals(""))) consumer.setCreativeId(creativeId);
+                        if (!(comboType == null || comboType.trim().equals(""))) consumer.setComboType(comboType);
+                        if (time != null) consumer.setTime(time);
+                        if (time != null) consumer.setDate(new Timestamp(time * 1000)); // 日期
 //                        System.out.println("时间戳:"+ new Timestamp(time * 1000));
 
                         return Tuple2.of(arr[0], consumer);
@@ -100,13 +105,14 @@ public class RealTimeTask {
                         //当is_last_invest=“1”，取日志里面的时间戳字段更新last_invest_time；
                         //当is_invest=“1”，取日志里面的时间戳字段更新invest_time；
                         String time = null;
-                        if(arr[1]!=null && !arr[1].trim().equals("")) time = new Timestamp(Long.parseLong(arr[1])*1000).toString(); // 时间
+                        if (arr[1] != null && !arr[1].trim().equals(""))
+                            time = new Timestamp(Long.parseLong(arr[1]) * 1000).toString(); // 时间
                         String orderId = arr[2];
                         String orderStatus = arr[3];
                         String otherStatus = arr[4];
-                        String activeTime=null;
-                        if(otherStatus.equals("AC002")){
-                            activeTime=time;
+                        String activeTime = null;
+                        if (otherStatus.equals("AC002")) {
+                            activeTime = time;
                         }
 
                         String sendNo = arr[5]; // 物流单号
@@ -118,29 +124,34 @@ public class RealTimeTask {
 
                         String isLastInvest = arr[10];  //激活后充值
                         String lastINvestTime = null;
-                        if(isLastInvest.equals("1")){
-                            lastINvestTime=time;
+                        if (isLastInvest.equals("1")) {
+                            lastINvestTime = time;
                         }
                         String isInvest = arr[11]; // 激活前充值
                         String investTime = null;
-                        if("1".equals(isInvest)){
+                        if ("1".equals(isInvest)) {
                             investTime = time;
                         }
                         String etype = arr[12]; // 头条转化类型
                         OrderDetail orderDetail = new OrderDetail();
-                        if(orderId !=null && !"".equals(orderId.trim())) orderDetail.setOrderId(orderId);
-                        if(orderStatus !=null && !"".equals(orderStatus.trim())) orderDetail.setOrderStatus(orderStatus);
-                        if(! "".equals(otherStatus.trim())) orderDetail.setOtherStatus(otherStatus);
-                        if(activeTime != null && ! "".equals(activeTime)) orderDetail.setActiveTime(activeTime);
-                        if(sendNo != null && ! "".equals(sendNo)) orderDetail.setSendNo(sendNo);
-                        if(logisticsName != null && ! "".equals(logisticsName)) orderDetail.setLogisticsName(logisticsName);
-                        if(logisticsStatus != null && ! "".equals(logisticsStatus)) orderDetail.setLogisticsStatus(logisticsStatus);
-                        if(orderStatusDesc != null && ! "".equals(orderStatusDesc)) orderDetail.setOrderStatus(orderStatusDesc);
-                        if( ! "".equals(isLastInvest)) orderDetail.setIsLastInvest(isLastInvest);
-                        if(lastINvestTime != null && ! "".equals(lastINvestTime)) orderDetail.setLastInvestTime(lastINvestTime);
-                        if(isInvest != null && ! "".equals(isInvest)) orderDetail.setIsInvest(isInvest);
-                        if(investTime != null && ! "".equals(investTime)) orderDetail.setInvestTime(investTime);
-                        if(etype != null && ! "".equals(etype)) orderDetail.setEtype(etype);
+                        if (orderId != null && !"".equals(orderId.trim())) orderDetail.setOrderId(orderId);
+                        if (orderStatus != null && !"".equals(orderStatus.trim()))
+                            orderDetail.setOrderStatus(orderStatus);
+                        if (!"".equals(otherStatus.trim())) orderDetail.setOtherStatus(otherStatus);
+                        if (activeTime != null && !"".equals(activeTime)) orderDetail.setActiveTime(activeTime);
+                        if (sendNo != null && !"".equals(sendNo)) orderDetail.setSendNo(sendNo);
+                        if (logisticsName != null && !"".equals(logisticsName))
+                            orderDetail.setLogisticsName(logisticsName);
+                        if (logisticsStatus != null && !"".equals(logisticsStatus))
+                            orderDetail.setLogisticsStatus(logisticsStatus);
+                        if (orderStatusDesc != null && !"".equals(orderStatusDesc))
+                            orderDetail.setOrderStatus(orderStatusDesc);
+                        if (!"".equals(isLastInvest)) orderDetail.setIsLastInvest(isLastInvest);
+                        if (lastINvestTime != null && !"".equals(lastINvestTime))
+                            orderDetail.setLastInvestTime(lastINvestTime);
+                        if (isInvest != null && !"".equals(isInvest)) orderDetail.setIsInvest(isInvest);
+                        if (investTime != null && !"".equals(investTime)) orderDetail.setInvestTime(investTime);
+                        if (etype != null && !"".equals(etype)) orderDetail.setEtype(etype);
 //                        if(comboType != null && ! "".equals(comboType)) orderDetail.setComboType(comboType);
 //                        if(isChooseNum != null && ! "".equals(isChooseNum)) orderDetail.setIsChooseNum(isChooseNum);
 //                        System.out.println("orderDetail:\t"+orderDetail);
