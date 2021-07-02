@@ -15,11 +15,8 @@ import org.apache.flink.streaming.api.datastream.DataStreamSource;
 import org.apache.flink.streaming.api.datastream.SingleOutputStreamOperator;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.apache.flink.streaming.connectors.kafka.FlinkKafkaConsumer;
-import org.apache.flink.util.OutputTag;
 
 import java.sql.Timestamp;
-import java.text.SimpleDateFormat;
-import java.util.Date;
 import java.util.Objects;
 import java.util.Properties;
 
@@ -55,8 +52,8 @@ public class RealTimeTask {
 //                System.out.println("输入: "+value);
                 if (value != null) {
                     String[] arr = value.split("\t", -1);
-
-                    if (arr[0].equals("316") && arr.length == 18) { // 下单用户 consumer
+//                    System.out.println("长度:"+ arr.length);
+                    if (arr[0].equals("316") && arr.length >= 19 && !arr[3].equals("")) { // 下单用户 consumer ,一定要有orderId
                         String orderId = arr[3];
                         String templateId = arr[4];
                         String cartNo = arr[5];
@@ -72,6 +69,8 @@ public class RealTimeTask {
                         String isChooseNum = null; // 是否选号,预留
                         Long time = null;
                         if (arr[1] != null && !arr[1].equals("")) time = Long.parseLong(arr[1]);// 时间戳
+                        String orderMobilePhone = arr[18]; // 下单号码
+                        String channelId = arr[16]; // 渠道ID
 
                         // 获取
 //                        SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd hh:mm:ss");
@@ -96,10 +95,12 @@ public class RealTimeTask {
                         if (!(comboType == null || comboType.trim().equals(""))) consumer.setComboType(comboType);
                         if (time != null) consumer.setTime(time);
                         if (time != null) consumer.setDate(new Timestamp(time * 1000)); // 日期
+                        if(orderMobilePhone !=null && !orderMobilePhone.trim().equals("")) consumer.setOrderMobilePhone(orderMobilePhone);
+                        if(channelId !=null && !channelId.trim().equals("")) consumer.setChannelId(channelId);
 //                        System.out.println("时间戳:"+ new Timestamp(time * 1000));
 
                         return Tuple2.of(arr[0], consumer);
-                    } else if (arr[0].equals("317") && arr.length == 14) { // 订单详情  order_details
+                    } else if (arr[0].equals("317") && arr.length >= 14 && !arr[2].equals("")) { // 订单详情  order_details
                         //订单详情表，新增了这3个字段：
                         //当other_status=“AC002”，取日志里面的时间戳字段更新active_time；
                         //当is_last_invest=“1”，取日志里面的时间戳字段更新last_invest_time；

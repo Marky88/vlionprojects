@@ -29,4 +29,6 @@ public class Consumer implements Serializable {
     private String isChooseNum; // 是否选号
     private Long time; // 时间戳
     private Timestamp date;//日期
+    private String orderMobilePhone;// 下单号码
+    private String channelId; //渠道id
 }

@@ -40,6 +40,7 @@ object OfflineStatistics {
                |    count(if(logtype='14',1,null)) as imp_count,  -- 曝光次数
                |    sum(if(logtype='14',win_price,0)) as real_cost,  -- 实际消耗
                |    count(if(logtype='15',logtype,null)) as clk_count,  -- 点击次数
+               |    count(if(logtype='17',logtype,null)) as trans_count,  -- 转化数
                |    '0' as process_status  -- 状态 0: 处理中  1: 成功
                |from
                |    (

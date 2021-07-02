@@ -1,15 +1,18 @@
 package com.vlion.sink;
 
-import com.vlion.bean.IntendUser;
+import com.alibaba.druid.pool.DruidDataSourceFactory;
 import com.vlion.utils.PropertiesUtils;
 import org.apache.flink.api.java.tuple.Tuple2;
 import org.apache.flink.api.java.tuple.Tuple3;
 import org.apache.flink.api.java.tuple.Tuple4;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.streaming.api.functions.sink.RichSinkFunction;
-import org.apache.flink.streaming.api.functions.sink.SinkFunction;
 
+import javax.sql.DataSource;
 import java.sql.*;
+import java.text.SimpleDateFormat;
+import java.util.Date;
+import java.util.Properties;
 
 /**
  * @description:
@@ -17,33 +20,27 @@ import java.sql.*;
  * @time: 2021/6/28/0028 17:16
  */
 public class MysqlSinkAgg extends RichSinkFunction<Tuple2<Tuple4<String, String, String,String>, Long>>  {
-    private Connection conn;
-    private PreparedStatement psIntendUser;
+//    private Connection conn;
+//    private PreparedStatement psIntendUser;
+
+    private DataSource dataSource;
 
     @Override
     public void open(Configuration parameters) throws Exception {
-        Class.forName(PropertiesUtils.getString("driver"));
-        conn = DriverManager.getConnection(PropertiesUtils.getString("url"),
-                PropertiesUtils.getString("username"), PropertiesUtils.getString("password")
-        );
-        //这个表，（每小时+每个状态码+h5模板）统计一条数据入库
-        psIntendUser = conn.prepareStatement("replace into intend_user(template_id,code,msg,pv,`time`) values(?,?,?,?,?)"); // 5个
-
-        //防止超8小时连接断开
-        new Thread(() -> {
-            while(true){
-                try {
-                    ResultSet resultSet = conn.prepareStatement("select 1").executeQuery();
-                } catch (SQLException throwables) {
-                    throwables.printStackTrace();
-                }
-                try {
-                    Thread.sleep(14400000);
-                } catch (InterruptedException e) {
-                    e.printStackTrace();
-                }
-            }
-        }).start();
+        //构建连接池
+        Properties properties = new Properties();
+        properties.setProperty("driverClassName", PropertiesUtils.getString("driver"));
+        properties.setProperty("url", PropertiesUtils.getString("url"));
+        properties.setProperty("username", PropertiesUtils.getString("username"));
+        properties.setProperty("password", PropertiesUtils.getString("password"));
+        properties.setProperty("maxActive", "2");
+//        properties.setProperty("timeBetweenEvictionRunsMillis",);
+//        properties.setProperty("minEvictableIdleTimeMillis",);
+        try {
+            dataSource = DruidDataSourceFactory.createDataSource(properties);
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
 
     }
 
@@ -53,25 +50,52 @@ public class MysqlSinkAgg extends RichSinkFunction<Tuple2<Tuple4<String, String,
 //      arr[4], // 入口模版  arr[2], // 状态码
 //                arr[3], // 错误原因
 //                arr[1] // 时间戳
-        String template = value.f0.f0;
-        String code = value.f0.f1;
-        String msg = value.f0.f2;
-        String dayHour = value.f0.f3;
-        long pv = value.f1;
+        Connection conn =null;
+        PreparedStatement psIntendUser = null;
+        try{
+            conn = dataSource.getConnection();
+            psIntendUser = conn.prepareStatement("replace into intend_user(template_id,code,msg,pv,`time`,`hour`) values(?,?,?,?,?,?)");
+            //时间戳从context里面拿
+//            long currentWaterMark = context.currentWatermark();
+//            System.out.println("currentWaterMark"+currentWaterMark);
+//            String format = new SimpleDateFormat("yyyy-MM-dd HH").format(new Date(currentWaterMark-1L));
+            String template = value.f0.f0;
+            String code = value.f0.f1;
+            String msg = value.f0.f2;
+            String dayHour = value.f0.f3;
+            String[] arr = dayHour.split(" ");
+            long pv = value.f1;
 
-        psIntendUser.setString(1,template);
-        psIntendUser.setString(2,code);
-        psIntendUser.setString(3,msg);
-        psIntendUser.setLong(4,pv);
-        psIntendUser.setString(5,dayHour);
-        psIntendUser.execute();
+            psIntendUser.setString(1,template);
+            psIntendUser.setString(2,code);
+            psIntendUser.setString(3,msg);
+            psIntendUser.setLong(4,pv);
+            psIntendUser.setString(5,arr[0]);
+            psIntendUser.setString(6,arr[1]);
+            psIntendUser.execute();
+
+        }catch (Exception e){
+            System.out.println(new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(new Date().getTime()) + " 报错:↓ " + value);
+            e.printStackTrace();
+        }finally {
+            if(psIntendUser !=null){
+                psIntendUser.close();
+                psIntendUser=null;
+            }
+            if(conn != null){
+                conn.close();;
+                conn =null;
+            }
+        }
 
     }
 
     @Override
     public void close() throws Exception {
-        if(psIntendUser!=null) psIntendUser.close();
-        if(conn!=null) conn.close();
+        //关闭连接和释放资源
+        if (dataSource != null) {
+            dataSource = null;
+        }
     }
 
 }
