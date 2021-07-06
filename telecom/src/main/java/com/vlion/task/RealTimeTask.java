@@ -164,8 +164,10 @@ public class RealTimeTask {
                     return null;
                 }
             }
-        }).filter(Objects::nonNull)
-                .returns(Types.TUPLE(Types.STRING, Types.GENERIC(Object.class)));
+        })
+            .filter(Objects::nonNull).returns(Types.TUPLE(Types.STRING, Types.GENERIC(Object.class)))
+
+            ;
 
         logTypeAndGENERIC.addSink(new MysqlSinkOneByOne()).name("mysql sink");
 //        logTypeAndGENERIC.print();

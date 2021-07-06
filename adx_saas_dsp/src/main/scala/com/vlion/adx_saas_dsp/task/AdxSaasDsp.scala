@@ -8,7 +8,7 @@ import org.apache.spark.sql.SparkSession
  * @description:
  * @author: malichun
  * @time: 2021/6/9/0009 15:52
- *
+ *  需求文档地址: http://wiki.vlion.cn/pages/viewpage.action?pageId=36439599
  */
 object AdxSaasDsp {
     def main(args: Array[String]): Unit = {
@@ -27,11 +27,10 @@ object AdxSaasDsp {
 
         val etlDate = args(0)
         val etlHour = args(1)
-
-        OfflineStatistics.consumeSummary(spark,etlDate,etlHour)
-
-
-
-
+        // 1.2.2 按小时统计广告计划消耗数据
+        OfflineStatistics.preprocessTable(spark,etlDate,etlHour)
+        OfflineStatistics.planSummary(spark,etlDate,etlHour)
+        OfflineStatistics.creativeSummary(spark,etlDate,etlHour)
+        OfflineStatistics.downstreamSummary(spark,etlDate,etlHour)
     }
 }
