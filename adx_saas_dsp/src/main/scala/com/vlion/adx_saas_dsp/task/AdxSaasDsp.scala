@@ -1,6 +1,7 @@
 package com.vlion.adx_saas_dsp.task
 
 import com.vlion.adx_saas_dsp.analysis.OfflineStatistics
+import com.vlion.adx_saas_dsp.load.LoadMySql
 import org.apache.log4j.{Level, Logger}
 import org.apache.spark.sql.SparkSession
 
@@ -28,6 +29,7 @@ object AdxSaasDsp {
         val etlDate = args(0)
         val etlHour = args(1)
         // 1.2.2 按小时统计广告计划消耗数据
+        LoadMySql.readMysql(spark) // 加载mysql的数据
         OfflineStatistics.preprocessTable(spark,etlDate,etlHour)
         OfflineStatistics.planSummary(spark,etlDate,etlHour)
         OfflineStatistics.creativeSummary(spark,etlDate,etlHour)

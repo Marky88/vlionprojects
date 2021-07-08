@@ -1,6 +1,7 @@
 package com.vlion.adx_saas_dsp.analysis
 
 import com.vlion.adx_saas_dsp.jdbc.MySQL
+import org.apache.spark.SparkContext
 import org.apache.spark.sql.SparkSession
 
 /**
@@ -131,6 +132,34 @@ object OfflineStatistics {
         val creativeDF = spark.sql(
             s"""
                |select
+               |    t1.time,
+               |    t1.hour,
+               |    t1.admaster_id,
+               |    t1.plan_id,
+               |    t1.creative_id,
+               |    t1.creative_type,
+               |    t1.plan_price,
+               |    t1.bid_count,
+               |    t1.inner_win_count,
+               |    t1.inner_bid_succ_rate,
+               |    t1.outer_bid_succ_count,
+               |    t1.outer_bid_succ_rate,
+               |    t1.outer_bid_fail_count,
+               |    t1.imp_count,
+               |    t1.imp_rate,
+               |    t1.avg_win_price,
+               |    t1.clk_count,
+               |    t1.clk_rate,
+               |    t1.trans_count,
+               |    t1.trans_rate,
+               |    t1.total_cost,
+               |    t1.trans_cost,
+               |    t2.conversion_unit_price * t1.trans_count as total_earning, -- 总收益
+               |    t2.conversion_unit_price * t1.trans_count - t1.total_cost as profit, -- 利润
+               |    '0' as process_status  -- 状态 0: 处理中  1: 成功
+               |from
+               |(
+               |select
                |    '${etlDate}' as time,
                |    '${etlTime}' as hour,
                |    admaster_id,
@@ -138,16 +167,24 @@ object OfflineStatistics {
                |    creative_id,
                |    adsolt_type as creative_type,
                |    max(if(logtype='11' and r_n=1,plan_price,0)) as plan_price, --计划出价,取最新的
-               |    max(if(logtype='11' and r_n=1,real_price,0)) as real_price, --实际出价
-               |    count(if(logtype='11',1,null)) as plan_bid_count, -- 计划出价次数
+               |    -- max(if(logtype='11' and r_n=1,real_price,0)) as real_price, --实际出价
+               |    count(if(logtype='11',1,null)) as bid_count, -- 计划出价次数
                |    count(if(logtype='12',1,null)) as inner_win_count, -- 赢得内部竞价次数
+               |    count(if(logtype='12',1,null)) / count(if(logtype='11',1,null)) as inner_bid_succ_rate, --内部竞价成功率
                |    count(if(logtype='13',1,null)) as outer_bid_succ_count, -- 外部竞价成功次数
+               |    count(if(logtype='13',1,null)) / count(if(logtype='12',1,null)) as outer_bid_succ_rate, --外部竞价成功率
                |    count(if(logtype='16',1,null)) as outer_bid_fail_count,  -- 外部竞价失败次数
                |    count(if(logtype='14',1,null)) as imp_count,  -- 曝光次数
-               |    sum(if(logtype='14',win_price,0)) as real_cost,  -- 实际消耗
+               |    count(if(logtype='14',1,null)) / count(if(logtype='13',1,null)) as imp_rate, -- 曝光率
+               |    sum(if(logtype='14',win_price,null)) / count(if(logtype='14',1,null)) as avg_win_price, -- 平均结算价
+               |    -- sum(if(logtype='14',win_price,0)) as real_cost,  -- 实际消耗
                |    count(if(logtype='15',logtype,null)) as clk_count,  -- 点击次数
+               |    count(if(logtype='15',logtype,null)) / count(if(logtype='14',1,null)) as clk_rate, -- 点击率
                |    count(if(logtype='17',logtype,null)) as trans_count,  -- 转化数
-               |    '0' as process_status  -- 状态 0: 处理中  1: 成功
+               |    count(if(logtype='17',logtype,null)) / count(if(logtype='15',logtype,null)) as trans_rate, -- 转化率
+               |    sum(if(logtype='14',win_price,null)) as total_cost, -- 总消耗
+               |    sum(if(logtype='14',win_price,null)) / count(if(logtype='17',logtype,null)) as trans_cost -- 转化成本
+               |    -- '0' as process_status  -- 状态 0: 处理中  1: 成功
                |from (
                |    select
                |        *,
@@ -158,6 +195,10 @@ object OfflineStatistics {
                |    ) t
                |group by
                |    admaster_id,plan_id,creative_id,adsolt_type
+               |) t1
+               |    left join
+               |dsp_campaign_fake t2
+               |    on t1.plan_id = t2.plan_id
                |""".stripMargin)
 
         creativeDF
@@ -189,18 +230,28 @@ object OfflineStatistics {
                |    '${etlDate}' as time,
                |    '${etlTime}' as hour,
                |    downstream_id,
+               |    adsolt_type, -- 广告位类型
                |    count(if(logtype = '10',1,null)) as  req_count, -- 请求总数
-               |    avg(if(logtype='10',floor_price,null)) as avg_floor_price, -- 平均底价
-               |    avg(if(logtype ='14', win_price,null)) as avg_win_price, -- 平均结算价
+               |    int(count(if(logtype = '10',1,null))/3600) as qps,
+               |    sum(if(logtype='10',floor_price,null)) / count(if(logtype = '10',1,null)) as avg_floor_price, -- 平均底价
+               |    -- avg(if(logtype ='14', win_price,null)) as avg_win_price, -- 平均结算价
                |    count(if(logtype = '10' and res_code ='400',1,null)) as abnormal_req_count, -- 异常请求数
+               |    count(if(logtype='12',1,null)) as fill_resp_count, -- 填充响应数
+               |    avg(if(logtype='12', plan_price ,null)) avg_bid_price ,-- 平均出价
+               |    count(if(logtype='12',1,null)) / count(if(logtype = '10',1,null)) as fill_rate, -- 填充率
                |    count(if(logtype='11',1,null)) as plan_bid_count, -- 计划出价总次数
-               |    count(if(logtype='12',1,null)) as inner_win_count, -- 赢得内部竞价次数
+               |    -- count(if(logtype='12',1,null)) as inner_win_count, -- 赢得内部竞价次数
                |    count(if(logtype='13',1,null)) as outer_bid_succ_count, -- 外部竞价成功总次数
+               |    count(if(logtype='13',1,null)) / count(if(logtype='12',1,null)) as bid_win_rate, -- 竞价成功率
                |    count(if(logtype='16',1,null)) as outer_bid_fail_count, -- 外部竞价失败总次数
                |    count(if(logtype='14',1,null)) as imp_count, -- 曝光总次数
-               |    sum(if(logtype='14',win_price,0)) as real_cost,  -- 实际消耗
-               |    count(if(logtype='15',logtype,null)) as clk_count,  -- 点击次数
-               |    count(if(logtype='17',logtype,null)) as trans_count,  -- 点击次数
+               |    sum(if(logtype='14',win_price,null)) / count(if(logtype='14',1,null)) as avg_win_price, -- 平均结算价
+               |    count(if(logtype='14',1,null)) / count(if(logtype='13',1,null)) as imp_rate, -- 曝光率
+               |    -- sum(if(logtype='14',win_price,0)) as real_cost,  -- 实际消耗
+               |    count(if(logtype='15',logtype,null)) as clk_count,  -- 点击总次数
+               |    count(if(logtype='15',logtype,null)) / count(if(logtype='14',logtype,null)) as clk_rate, -- 点击率
+               |    -- count(if(logtype='17',logtype,null)) as trans_count,  -- 转化数
+               |    sum(if(logtype='14',win_price,null)) as total_cost, -- 总消耗
                |    '0' as process_status
                |from
                |   ( -- 先去个重,去时间小的一条
@@ -211,8 +262,10 @@ object OfflineStatistics {
                |        ods.ods_dsp_info
                |        where etl_date='${etlDate}' and etl_hour='${etlHour}'
                |  ) t
+               |  where r_n = 1
                |   group by
-               |    downstream_id -- 下游id
+               |    downstream_id, -- 下游id
+               |    adsolt_type -- 广告位id
                |""".stripMargin)
 
         downstreamDF

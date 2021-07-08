@@ -42,6 +42,7 @@ public class RealTimeTask {
         env.getCheckpointConfig().setCheckpointingMode(CheckpointingMode.EXACTLY_ONCE);
         env.enableCheckpointing(5000);
         env.setStateBackend(new FsStateBackend(PropertiesUtils.getString("flink.checkpoint.dir")));
+        env.getCheckpointConfig().setCheckpointingMode(CheckpointingMode.EXACTLY_ONCE);
 
         DataStreamSource<String> kafkaSource = env
                 .addSource(new FlinkKafkaConsumer<>(PropertiesUtils.getString("kafka.topic"), new SimpleStringSchema(), properties));
