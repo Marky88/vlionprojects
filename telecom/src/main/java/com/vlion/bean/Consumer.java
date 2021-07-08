@@ -31,4 +31,8 @@ public class Consumer implements Serializable {
     private Timestamp date;//日期
     private String orderMobilePhone;// 下单号码
     private String channelId; //渠道id
+    private String sourceType; // 来源方式打标说明
+    private String flowType; // 引流平台打标说明
+    private String pid; //一级代理
+    private String eid; //二级代理
 }

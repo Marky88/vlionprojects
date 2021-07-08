@@ -96,7 +96,19 @@ public class MysqlSinkOneByOne extends RichSinkFunction<Tuple2<String, Object>> 
                     updateSql.append(" time=").append(consumer.getTime()).append(",");
                 }
                 if (!(consumer.getDate() == null)) {
-                    updateSql.append(" `date`='").append(consumer.getDate()).append("'");
+                    updateSql.append(" `date`='").append(consumer.getDate()).append("',");
+                }
+                if(checkNotNull(consumer.getSourceType())){
+                    updateSql.append(" source_type='").append(consumer.getSourceType()).append("',");
+                }
+                if(checkNotNull(consumer.getFlowType())){
+                    updateSql.append(" flow_type='").append(consumer.getFlowType()).append("',");
+                }
+                if(checkNotNull(consumer.getPid())){
+                    updateSql.append(" pid='").append(consumer.getPid()).append("',");
+                }
+                if(checkNotNull(consumer.getEid())){
+                    updateSql.append(" eid='").append(consumer.getEid()).append("',");
                 }
 
                 updateSql.append(" where order_id='").append(consumer.getOrderId()).append("'");
@@ -108,8 +120,9 @@ public class MysqlSinkOneByOne extends RichSinkFunction<Tuple2<String, Object>> 
 
                     if (statement.getUpdateCount() == 0) { // 如果没有更新
                         psCustom = conn.prepareStatement("insert into consumer(order_id,template_id," +
-                                "cart_no,buyer_name,mobile_phone,receiver_prov,receiver_city,receiver_district,receiver_adress,plan_id,creative_id,combo_type,is_choose_num,`time`,`date`) " +
-                                "values(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)");
+                                "cart_no,buyer_name,mobile_phone,receiver_prov,receiver_city," +
+                            "receiver_district,receiver_adress,plan_id,creative_id,combo_type,is_choose_num,`time`,`date`, source_type,flow_type,pid,eid) " +
+                                "values(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)");
                         //插入
                         psCustom.setString(1, consumer.getOrderId());
                         psCustom.setString(2, consumer.getTemplateId());
@@ -126,6 +139,10 @@ public class MysqlSinkOneByOne extends RichSinkFunction<Tuple2<String, Object>> 
                         psCustom.setString(13, consumer.getIsChooseNum());
                         psCustom.setInt(14, Integer.parseInt(consumer.getTime().toString()));
                         psCustom.setString(15, consumer.getDate().toString());
+                        psCustom.setString(16,consumer.getSourceType());
+                        psCustom.setString(17,consumer.getFlowType());
+                        psCustom.setString(18,consumer.getPid());
+                        psCustom.setString(19,consumer.getEid());
 
                         psCustom.execute();
                     }

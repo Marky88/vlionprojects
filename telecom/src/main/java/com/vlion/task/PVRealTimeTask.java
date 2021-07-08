@@ -7,6 +7,7 @@ import org.apache.flink.api.common.eventtime.SerializableTimestampAssigner;
 import org.apache.flink.api.common.eventtime.WatermarkStrategy;
 import org.apache.flink.api.common.functions.RichFlatMapFunction;
 import org.apache.flink.api.common.functions.RichMapFunction;
+import org.apache.flink.api.common.restartstrategy.RestartStrategies;
 import org.apache.flink.api.common.serialization.SimpleStringSchema;
 import org.apache.flink.api.common.typeinfo.Types;
 import org.apache.flink.api.java.functions.KeySelector;
@@ -15,6 +16,7 @@ import org.apache.flink.runtime.state.filesystem.FsStateBackend;
 import org.apache.flink.streaming.api.CheckpointingMode;
 import org.apache.flink.streaming.api.TimeCharacteristic;
 import org.apache.flink.streaming.api.datastream.DataStreamSource;
+import org.apache.flink.streaming.api.environment.CheckpointConfig;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.apache.flink.streaming.api.windowing.assigners.TumblingEventTimeWindows;
 import org.apache.flink.streaming.api.windowing.time.Time;
@@ -43,9 +45,29 @@ public class PVRealTimeTask {
 
         //1.创建执行环境
         StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
-        env.getCheckpointConfig().setCheckpointingMode(CheckpointingMode.EXACTLY_ONCE);
-        env.enableCheckpointing(5000);
+
+        // 1.状态后端配置
         env.setStateBackend(new FsStateBackend(PropertiesUtils.getString("flink.checkpoint.dir") + "_1"));
+        // 2.检查点配置
+        env.enableCheckpointing(5000);
+        // 高级选项
+        env.getCheckpointConfig().setCheckpointingMode(CheckpointingMode.EXACTLY_ONCE);
+        //Checkpoint的处理超时时间
+        env.getCheckpointConfig().setCheckpointTimeout(60000L);
+        // 最大允许同时处理几个Checkpoint(比如上一个处理到一半，这里又收到一个待处理的Checkpoint事件)
+        env.getCheckpointConfig().setMaxConcurrentCheckpoints(1);
+        // 与上面setMaxConcurrentCheckpoints(2) 冲突，这个时间间隔是 当前checkpoint的处理完成时间与接收最新一个checkpoint之间的时间间隔
+        env.getCheckpointConfig().setMinPauseBetweenCheckpoints(100L);
+        //最多能容忍几次checkpoint处理失败（默认0，即checkpoint处理失败，就当作程序执行异常）
+        env.getCheckpointConfig().setTolerableCheckpointFailureNumber(0);
+        // 开启在 job 中止后仍然保留的 externalized checkpoints  // 作业取消时外部化检查点的清理行为, 在作业取消时保留外部检查点。
+        env.getCheckpointConfig().enableExternalizedCheckpoints(CheckpointConfig.ExternalizedCheckpointCleanup.RETAIN_ON_CANCELLATION);
+        // 3.重启策略配置
+        // 固定延迟重启(最多尝试3次，每次间隔10s)
+        env.setRestartStrategy(RestartStrategies.fixedDelayRestart(3, 10000L));
+        // 失败率重启(在10分钟内最多尝试3次，每次至少间隔1分钟)
+//        env.setRestartStrategy(RestartStrategies.failureRateRestart(3, org.apache.flink.api.common.time.Time.minutes(10), org.apache.flink.api.common.time.Time.minutes(1)));
+
 
         // 创建watermarkStrategy
         WatermarkStrategy<IntendUser> wms = WatermarkStrategy

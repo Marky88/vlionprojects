@@ -5,7 +5,9 @@ import com.vlion.bean.OrderDetail;
 import com.vlion.sink.MysqlSinkOneByOne;
 import com.vlion.utils.PropertiesUtils;
 import org.apache.flink.api.common.functions.RichMapFunction;
+import org.apache.flink.api.common.restartstrategy.RestartStrategies;
 import org.apache.flink.api.common.serialization.SimpleStringSchema;
+import org.apache.flink.api.common.time.Time;
 import org.apache.flink.api.common.typeinfo.Types;
 import org.apache.flink.api.java.tuple.Tuple2;
 import org.apache.flink.api.java.utils.ParameterTool;
@@ -13,6 +15,7 @@ import org.apache.flink.runtime.state.filesystem.FsStateBackend;
 import org.apache.flink.streaming.api.CheckpointingMode;
 import org.apache.flink.streaming.api.datastream.DataStreamSource;
 import org.apache.flink.streaming.api.datastream.SingleOutputStreamOperator;
+import org.apache.flink.streaming.api.environment.CheckpointConfig;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.apache.flink.streaming.connectors.kafka.FlinkKafkaConsumer;
 
@@ -39,10 +42,29 @@ public class RealTimeTask {
         //1.创建执行环境
         StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
 
-        env.getCheckpointConfig().setCheckpointingMode(CheckpointingMode.EXACTLY_ONCE);
-        env.enableCheckpointing(5000);
+        // 1.状态后端配置
         env.setStateBackend(new FsStateBackend(PropertiesUtils.getString("flink.checkpoint.dir")));
+        // 2.检查点配置
+        env.enableCheckpointing(5000);
+          // 高级选项
         env.getCheckpointConfig().setCheckpointingMode(CheckpointingMode.EXACTLY_ONCE);
+        //Checkpoint的处理超时时间
+        env.getCheckpointConfig().setCheckpointTimeout(60000L);
+        // 最大允许同时处理几个Checkpoint(比如上一个处理到一半，这里又收到一个待处理的Checkpoint事件)
+        env.getCheckpointConfig().setMaxConcurrentCheckpoints(1);
+        // 与上面setMaxConcurrentCheckpoints(2) 冲突，这个时间间隔是 当前checkpoint的处理完成时间与接收最新一个checkpoint之间的时间间隔
+        env.getCheckpointConfig().setMinPauseBetweenCheckpoints(100L);
+        //最多能容忍几次checkpoint处理失败（默认0，即checkpoint处理失败，就当作程序执行异常）
+        env.getCheckpointConfig().setTolerableCheckpointFailureNumber(0);
+        // 开启在 job 中止后仍然保留的 externalized checkpoints  // 作业取消时外部化检查点的清理行为, 在作业取消时保留外部检查点。
+        env.getCheckpointConfig().enableExternalizedCheckpoints(CheckpointConfig.ExternalizedCheckpointCleanup.RETAIN_ON_CANCELLATION);
+
+        // 3.重启策略配置
+        // 固定延迟重启(最多尝试3次，每次间隔10s)
+        env.setRestartStrategy(RestartStrategies.fixedDelayRestart(3, 10000L));
+        // 失败率重启(在10分钟内最多尝试3次，每次至少间隔1分钟)
+//        env.setRestartStrategy(RestartStrategies.failureRateRestart(3, Time.minutes(10), Time.minutes(1)));
+
 
         DataStreamSource<String> kafkaSource = env
                 .addSource(new FlinkKafkaConsumer<>(PropertiesUtils.getString("kafka.topic"), new SimpleStringSchema(), properties));
@@ -54,7 +76,7 @@ public class RealTimeTask {
                 if (value != null) {
                     String[] arr = value.split("\t", -1);
 //                    System.out.println("长度:"+ arr.length);
-                    if (arr[0].equals("316") && arr.length >= 19 && !arr[3].equals("")) { // 下单用户 consumer ,一定要有orderId
+                    if (arr[0].equals("316") && arr.length >= 24 && !arr[3].equals("")) { // 下单用户 consumer ,一定要有orderId
                         String orderId = arr[3];
                         String templateId = arr[4];
                         String cartNo = arr[5];
@@ -72,6 +94,10 @@ public class RealTimeTask {
                         if (arr[1] != null && !arr[1].equals("")) time = Long.parseLong(arr[1]);// 时间戳
                         String orderMobilePhone = arr[18]; // 下单号码
                         String channelId = arr[16]; // 渠道ID
+                        String sourceType = arr[19];// 来源方式打标说明
+                        String flowType = arr[20]; // 引流平台打标说明
+                        String pid = arr[22]; //一级代理
+                        String eid = arr[23]; //一级代理
 
                         // 获取
 //                        SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd hh:mm:ss");
@@ -99,6 +125,10 @@ public class RealTimeTask {
                         if(orderMobilePhone !=null && !orderMobilePhone.trim().equals("")) consumer.setOrderMobilePhone(orderMobilePhone);
                         if(channelId !=null && !channelId.trim().equals("")) consumer.setChannelId(channelId);
 //                        System.out.println("时间戳:"+ new Timestamp(time * 1000));
+                        if(sourceType != null && !sourceType.trim().equals("")) consumer.setSourceType(sourceType);
+                        if(flowType != null && !flowType.trim().equals("")) consumer.setFlowType(flowType);
+                        if(pid != null && !pid.trim().equals("")) consumer.setPid(pid);
+                        if(eid != null && !eid.trim().equals("")) consumer.setEid(eid);
 
                         return Tuple2.of(arr[0], consumer);
                     } else if (arr[0].equals("317") && arr.length >= 14 && !arr[2].equals("")) { // 订单详情  order_details
