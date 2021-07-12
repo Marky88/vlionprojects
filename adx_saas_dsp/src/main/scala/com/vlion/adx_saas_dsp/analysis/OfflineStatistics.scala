@@ -182,8 +182,8 @@ object OfflineStatistics {
                |    count(if(logtype='15',logtype,null)) / count(if(logtype='14',1,null)) as clk_rate, -- 点击率
                |    count(if(logtype='17',logtype,null)) as trans_count,  -- 转化数
                |    count(if(logtype='17',logtype,null)) / count(if(logtype='15',logtype,null)) as trans_rate, -- 转化率
-               |    sum(if(logtype='14',win_price,null)) as total_cost, -- 总消耗
-               |    sum(if(logtype='14',win_price,null)) / count(if(logtype='17',logtype,null)) as trans_cost -- 转化成本
+               |    sum(if(logtype='14',win_price,null)) /1000 as total_cost, -- 总消耗
+               |    (sum(if(logtype='14',win_price,null)) / 1000 ) / count(if(logtype='17',1,null)) as trans_cost -- 转化成本
                |    -- '0' as process_status  -- 状态 0: 处理中  1: 成功
                |from (
                |    select
@@ -251,7 +251,8 @@ object OfflineStatistics {
                |    count(if(logtype='15',logtype,null)) as clk_count,  -- 点击总次数
                |    count(if(logtype='15',logtype,null)) / count(if(logtype='14',logtype,null)) as clk_rate, -- 点击率
                |    -- count(if(logtype='17',logtype,null)) as trans_count,  -- 转化数
-               |    sum(if(logtype='14',win_price,null)) as total_cost, -- 总消耗
+               |    sum(if(logtype='14',win_price,null)) / 1000 as total_cost, -- 总消耗
+               |    (sum(if(logtype='14',win_price,null)) / 1000 ) / count(if(logtype='15',logtype,null)) as clk_cost, -- 点击成本
                |    '0' as process_status
                |from
                |   ( -- 先去个重,去时间小的一条

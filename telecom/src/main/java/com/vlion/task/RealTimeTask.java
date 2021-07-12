@@ -76,7 +76,7 @@ public class RealTimeTask {
                 if (value != null) {
                     String[] arr = value.split("\t", -1);
 //                    System.out.println("长度:"+ arr.length);
-                    if (arr[0].equals("316") && arr.length >= 24 && !arr[3].equals("")) { // 下单用户 consumer ,一定要有orderId
+                    if (arr[0].equals("316") && arr.length >= 25 && !arr[3].equals("")) { // 下单用户 consumer ,一定要有orderId
                         String orderId = arr[3];
                         String templateId = arr[4];
                         String cartNo = arr[5];
@@ -98,6 +98,7 @@ public class RealTimeTask {
                         String flowType = arr[20]; // 引流平台打标说明
                         String pid = arr[22]; //一级代理
                         String eid = arr[23]; //一级代理
+                        String ip = arr[24]; //用户ip
 
                         // 获取
 //                        SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd hh:mm:ss");
@@ -129,6 +130,7 @@ public class RealTimeTask {
                         if(flowType != null && !flowType.trim().equals("")) consumer.setFlowType(flowType);
                         if(pid != null && !pid.trim().equals("")) consumer.setPid(pid);
                         if(eid != null && !eid.trim().equals("")) consumer.setEid(eid);
+                        if(ip !=null && !ip.trim().equals("")) consumer.setIp(ip);
 
                         return Tuple2.of(arr[0], consumer);
                     } else if (arr[0].equals("317") && arr.length >= 14 && !arr[2].equals("")) { // 订单详情  order_details

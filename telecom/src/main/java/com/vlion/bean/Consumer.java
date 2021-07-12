@@ -35,4 +35,5 @@ public class Consumer implements Serializable {
     private String flowType; // 引流平台打标说明
     private String pid; //一级代理
     private String eid; //二级代理
+    private String ip; // 用户ip
 }

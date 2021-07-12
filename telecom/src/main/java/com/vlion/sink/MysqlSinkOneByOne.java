@@ -110,6 +110,9 @@ public class MysqlSinkOneByOne extends RichSinkFunction<Tuple2<String, Object>> 
                 if(checkNotNull(consumer.getEid())){
                     updateSql.append(" eid='").append(consumer.getEid()).append("',");
                 }
+                if(checkNotNull(consumer.getIp())){
+                    updateSql.append(" ip='").append(consumer.getIp()).append("',");
+                }
 
                 updateSql.append(" where order_id='").append(consumer.getOrderId()).append("'");
                 String sql = updateSql.toString().replaceAll(", +where", " where");
@@ -121,8 +124,8 @@ public class MysqlSinkOneByOne extends RichSinkFunction<Tuple2<String, Object>> 
                     if (statement.getUpdateCount() == 0) { // 如果没有更新
                         psCustom = conn.prepareStatement("insert into consumer(order_id,template_id," +
                                 "cart_no,buyer_name,mobile_phone,receiver_prov,receiver_city," +
-                            "receiver_district,receiver_adress,plan_id,creative_id,combo_type,is_choose_num,`time`,`date`, source_type,flow_type,pid,eid) " +
-                                "values(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)");
+                            "receiver_district,receiver_adress,plan_id,creative_id,combo_type,is_choose_num,`time`,`date`, source_type,flow_type,pid,eid,ip) " +
+                                "values(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)");
                         //插入
                         psCustom.setString(1, consumer.getOrderId());
                         psCustom.setString(2, consumer.getTemplateId());
@@ -143,6 +146,7 @@ public class MysqlSinkOneByOne extends RichSinkFunction<Tuple2<String, Object>> 
                         psCustom.setString(17,consumer.getFlowType());
                         psCustom.setString(18,consumer.getPid());
                         psCustom.setString(19,consumer.getEid());
+                        psCustom.setString(20,consumer.getIp());
 
                         psCustom.execute();
                     }
