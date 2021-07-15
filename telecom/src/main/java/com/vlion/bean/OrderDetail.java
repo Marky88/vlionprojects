@@ -25,5 +25,6 @@ public class OrderDetail implements Serializable {
     private String isInvest; // 激活前充值
     private String investTime; // 激活前充值时间
     private String etype ; // 头条转化类型
+    private String signTime; //签收时间
 }
 

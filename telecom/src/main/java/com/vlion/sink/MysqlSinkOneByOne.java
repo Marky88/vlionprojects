@@ -197,15 +197,20 @@ public class MysqlSinkOneByOne extends RichSinkFunction<Tuple2<String, Object>> 
                 if (checkNotNull(orderDetail.getIsLastInvest())) {
                     updateSql1.append(" is_last_invest='").append(orderDetail.getIsLastInvest()).append("',");
                 }
-                if (checkNotNull(orderDetail.getLastInvestTime())) {
-                    updateSql1.append(" last_invest_time='").append(orderDetail.getLastInvestTime()).append("',");
-                }
+//                if (checkNotNull(orderDetail.getLastInvestTime())) { // 20210714 添加lastInvestTime
+//                    updateSql1.append(" last_invest_time='").append(orderDetail.getLastInvestTime()).append("',");
+//                }
                 if (checkNotNull(orderDetail.getIsInvest())) {
                     updateSql1.append(" is_invest='").append(orderDetail.getIsInvest()).append("',");
                 }
                 if (checkNotNull(orderDetail.getEtype())) {
                     updateSql1.append(" etype='").append(orderDetail.getEtype()).append("',");
                 }
+
+                if (checkNotNull(orderDetail.getSignTime())) {
+                    updateSql1.append(" sign_time='").append(orderDetail.getSignTime()).append("',");
+                }
+
                 updateSql1.append(" where order_id='").append(orderDetail.getOrderId()).append("'");
                 String sql1 = updateSql1.toString().replaceAll(", +where", " where");
 //                    System.out.println("sql1: " + sql1);
@@ -217,7 +222,8 @@ public class MysqlSinkOneByOne extends RichSinkFunction<Tuple2<String, Object>> 
                         //插入
                         psOrderDetail = conn.prepareStatement("insert into order_details(order_id," +
                                 "order_status,other_status,active_time,send_no,logistics_name,logistics_status,order_status_desc,is_last_invest," +
-                                "last_invest_time,is_invest,invest_time,etype" +
+//                                "last_invest_time,is_invest,invest_time,etype" +
+                                "is_invest,invest_time,etype,sign_time" +
                                 ") values (?,?,?,?,?,?,?,?,?,?,?,?,?)"); // 13个?
 
                         psOrderDetail.setString(1, orderDetail.getOrderId());
@@ -229,10 +235,12 @@ public class MysqlSinkOneByOne extends RichSinkFunction<Tuple2<String, Object>> 
                         psOrderDetail.setString(7, orderDetail.getLogisticsStatus());
                         psOrderDetail.setString(8, orderDetail.getOrderStatusDesc());
                         psOrderDetail.setString(9, orderDetail.getIsLastInvest());
-                        psOrderDetail.setString(10, orderDetail.getLastInvestTime());
-                        psOrderDetail.setString(11, orderDetail.getIsInvest());
-                        psOrderDetail.setString(12, orderDetail.getInvestTime());
-                        psOrderDetail.setString(13, orderDetail.getEtype());
+//                        psOrderDetail.setString(10, orderDetail.getLastInvestTime());
+                        psOrderDetail.setString(10, orderDetail.getIsInvest());
+                        psOrderDetail.setString(11, orderDetail.getInvestTime());
+                        psOrderDetail.setString(12, orderDetail.getEtype());
+                        psOrderDetail.setString(13, orderDetail.getSignTime());
+
 
                         psOrderDetail.execute();
                     }

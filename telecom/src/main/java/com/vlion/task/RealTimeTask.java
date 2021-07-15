@@ -19,7 +19,9 @@ import org.apache.flink.streaming.api.environment.CheckpointConfig;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.apache.flink.streaming.connectors.kafka.FlinkKafkaConsumer;
 
+import java.sql.Date;
 import java.sql.Timestamp;
+import java.text.SimpleDateFormat;
 import java.util.Objects;
 import java.util.Properties;
 
@@ -189,6 +191,9 @@ public class RealTimeTask {
 //                        if(comboType != null && ! "".equals(comboType)) orderDetail.setComboType(comboType);
 //                        if(isChooseNum != null && ! "".equals(isChooseNum)) orderDetail.setIsChooseNum(isChooseNum);
 //                        System.out.println("orderDetail:\t"+orderDetail);
+                        if(logisticsStatus != null && logisticsName.equals("10")){ // 20210714新加
+                            orderDetail.setSignTime(time);
+                        }
                         return Tuple2.of("317", orderDetail);
                     } else {
                         return null;
