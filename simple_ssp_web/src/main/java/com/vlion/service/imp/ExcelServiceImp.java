@@ -47,22 +47,22 @@ public class ExcelServiceImp implements ExcelService {
 
         //找出匹配的计划id
         List<String> innerPlanIds = innerPlanIdAdsolcateId.stream()
-                .map(Pair::getValue0)
-                .filter(Objects::nonNull)
-                .distinct()
-                .collect(Collectors.toList());
+            .map(Pair::getValue0)
+            .filter(Objects::nonNull)
+            .distinct()
+            .collect(Collectors.toList());
 
         //查找sql2,计划id
         List<List<Object>> query2Res = zd.QuerySQL2(etlDateList, innerPlanIds);
         //找出匹配的广告位id
         List<String> innerAdsolcateId = innerPlanIdAdsolcateId
-                .stream()
-                .map(pair -> {
-                    if (pair.getValue1() != null) {
-                        return pair.getValue1().toString();
-                    }
-                    return null;
-                }).filter(Objects::nonNull).distinct().collect(Collectors.toList());
+            .stream()
+            .map(pair -> {
+                if (pair.getValue1() != null) {
+                    return pair.getValue1().toString();
+                }
+                return null;
+            }).filter(Objects::nonNull).distinct().collect(Collectors.toList());
 
         //查找广告位id
         List<List<Object>> query3Res = zd.QuerySQL3(etlDateList, innerAdsolcateId);
@@ -134,9 +134,9 @@ public class ExcelServiceImp implements ExcelService {
 //            N23*O23*AC23+
 //            Z23*Y23*AD23
             double col12 = Utils.getObjectValueInteger(value.get(7)) * 0.3 * Utils.getObjectValueDouble(value.get(26)) +
-                    Utils.getObjectValueInteger(value.get(10)) * Utils.getObjectValueDouble(value.get(11)) * Utils.getObjectValueDouble(value.get(27)) +
-                    Utils.getObjectValueInteger(value.get(13)) * Utils.getObjectValueDouble(value.get(14)) * Utils.getObjectValueDouble(value.get(28)) +
-                    Utils.getObjectValueInteger(value.get(25)) * Utils.getObjectValueDouble(value.get(24)) * Utils.getObjectValueDouble(value.get(29));
+                Utils.getObjectValueInteger(value.get(10)) * Utils.getObjectValueDouble(value.get(11)) * Utils.getObjectValueDouble(value.get(27)) +
+                Utils.getObjectValueInteger(value.get(13)) * Utils.getObjectValueDouble(value.get(14)) * Utils.getObjectValueDouble(value.get(28)) +
+                Utils.getObjectValueInteger(value.get(25)) * Utils.getObjectValueDouble(value.get(24)) * Utils.getObjectValueDouble(value.get(29));
 
             if (planIdValueList != null) {
 //             col11 = new BigDecimal(col10).multiply(new BigDecimal(col4)).divide(new BigDecimal(1000),3).doubleValue();//实际消耗 (实际单价 * 曝光 / 1000)
@@ -151,9 +151,9 @@ public class ExcelServiceImp implements ExcelService {
 
             //uv个数 = 当日有效拉新用户数 + 30日内有效召回用户数 + 30日有效召回用户数 + 60日有效召回用户数 + 90日有效召回用户数
             int col16 = Utils.getObjectValueInteger(value.get(3))
-                    + Utils.getObjectValueInteger(value.get(7))
-                    + Utils.getObjectValueInteger(value.get(13))
-                    + Utils.getObjectValueInteger(value.get(15));
+                + Utils.getObjectValueInteger(value.get(7))
+                + Utils.getObjectValueInteger(value.get(13))
+                + Utils.getObjectValueInteger(value.get(15));
             //剩下的3-29
 
             List<Object> return_ = new ArrayList<>();
@@ -225,7 +225,7 @@ public class ExcelServiceImp implements ExcelService {
 
             return return_;
         }).filter(Objects::nonNull)
-                .collect(Collectors.toList());
+            .collect(Collectors.toList());
 
         Workbook workbook = zd.generateZfbOutWorkBook(getTemplateInputStream("支付宝报告模版.xls"), "支付宝报告模版.xls", generatedList);
 
@@ -426,9 +426,9 @@ public class ExcelServiceImp implements ExcelService {
                 }
 
                 col5 = list2.get(8); // 曝光
-                 col6 = list2.get(9); // 点击
-                 col7 = Utils.getObjectValueDouble(list2.get(15))/ 100 ; // 点击率
-                 col9 = list2.get(11); // 出价 / ecpm
+                col6 = list2.get(9); // 点击
+                col7 = Utils.getObjectValueDouble(list2.get(15))/ 100 ; // 点击率
+                col9 = list2.get(11); // 出价 / ecpm
                 outList[4]=col4;
                 outList[5]=col5;
                 outList[6]=col6;
@@ -439,9 +439,9 @@ public class ExcelServiceImp implements ExcelService {
 
             List<Object> list3 = tokenMap3.get(newKey);
             if(list3 != null){
-                 col17 = list3.get(4); // 支付宝拉首唤
-                 col10 = list3.get(2); // 竞价率
-                 col11 = list3.get(3); //竞得率
+                col17 = list3.get(4); // 支付宝拉首唤
+                col10 = list3.get(2); // 竞价率
+                col11 = list3.get(3); //竞得率
                 outList[17]=col17;
                 outList[10]=col10;
                 outList[11]=col11;
@@ -485,7 +485,7 @@ public class ExcelServiceImp implements ExcelService {
 
             //实际花费 col13=M292*F292/1000
             if(checkNumNotNull(col12, col5)
-                    &&  checkNumNotZero(col5)
+                &&  checkNumNotZero(col5)
             ){
                 col13 = Utils.getObjectValueDouble(col12)*Utils.getObjectValueDouble(col5)/1000;
                 outList[13]=col13;
@@ -493,7 +493,7 @@ public class ExcelServiceImp implements ExcelService {
 
             //col15 盈亏= =O307-N307
             if(checkNumNotNull(col14, col13)
-                    &&  checkNumNotZero(col13)
+                &&  checkNumNotZero(col13)
             ){
                 col15 = Utils.getObjectValueDouble(col14) - Utils.getObjectValueDouble(col13);
                 outList[15]=col15;

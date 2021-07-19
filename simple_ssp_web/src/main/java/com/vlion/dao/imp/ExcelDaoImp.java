@@ -26,21 +26,21 @@ public class ExcelDaoImp implements ExcelDao {
     @Override
     public List<List<Object>> QuerySQL1() {
         String sql = "SELECT\n" +
-                "    plan.id,\n" +
-                "    plan.`name`, \n" +
-                "    media.media_id,\n" +
-                "    media.adslocation_id \n" +
-                "FROM plan LEFT JOIN (\n" +
-                "    SELECT\n" +
-                "        map.plan_id,\n" +
-                "        MAX( map.adslocation_id ) adslocation_id,\n" +
-                "        MAX( ads.media_id ) media_id \n" +
-                "    FROM\n" +
-                "        plan_adslocation_map map,\n" +
-                "        adslocation ads \n" +
-                "    WHERE map.adslocation_id = ads.id \n" +
-                "    GROUP BY map.plan_id \n" +
-                ") AS media ON plan.id = media.plan_id";
+            "    plan.id,\n" +
+            "    plan.`name`, \n" +
+            "    media.media_id,\n" +
+            "    media.adslocation_id \n" +
+            "FROM plan LEFT JOIN (\n" +
+            "    SELECT\n" +
+            "        map.plan_id,\n" +
+            "        MAX( map.adslocation_id ) adslocation_id,\n" +
+            "        MAX( ads.media_id ) media_id \n" +
+            "    FROM\n" +
+            "        plan_adslocation_map map,\n" +
+            "        adslocation ads \n" +
+            "    WHERE map.adslocation_id = ads.id \n" +
+            "    GROUP BY map.plan_id \n" +
+            ") AS media ON plan.id = media.plan_id";
         List<List<Object>> _return = new ArrayList<>();
         System.out.println("sqlSql1:");
         System.out.println(sql);
@@ -61,24 +61,24 @@ public class ExcelDaoImp implements ExcelDao {
     @Override
     public List<List<Object>> QuerySQL2(List<String> etlDates,List<String> planIds) {
         String sql="SELECT\n" +
-                "    CONCAT( time, '_', plan_id ) token, -- 匹配规则\n" +
-                "    time, -- 统计时间 \n" +
-                "    plan_id, -- 计划ID\n" +
-                "    SUM( `show` ) `show`, -- 曝光 \n" +
-                "    SUM( `click` ) `click`, -- 点击\n" +
-                "    ROUND( SUM( cost / 1000 / 100 ), 2 ) cost, -- 花费\n" +
-                "    ROUND( SUM( click ) / SUM( `show` ) * 100, 2 ) ctr, -- 点击率\n" +
-                "    ROUND( SUM( cost / 1000 / 100 ) / SUM( `show` ) * 1000, 2 ) ecpm, -- cpm\n" +
-                "    ROUND( SUM( cost / 1000 / 100 ) / SUM( click ), 2 ) cpc  -- cpc\n" +
-                "FROM\n" +
+            "    CONCAT( time, '_', plan_id ) token, -- 匹配规则\n" +
+            "    time, -- 统计时间 \n" +
+            "    plan_id, -- 计划ID\n" +
+            "    SUM( `show` ) `show`, -- 曝光 \n" +
+            "    SUM( `click` ) `click`, -- 点击\n" +
+            "    ROUND( SUM( cost / 1000 / 100 ), 2 ) cost, -- 花费\n" +
+            "    ROUND( SUM( click ) / SUM( `show` ) * 100, 2 ) ctr, -- 点击率\n" +
+            "    ROUND( SUM( cost / 1000 / 100 ) / SUM( `show` ) * 1000, 2 ) ecpm, -- cpm\n" +
+            "    ROUND( SUM( cost / 1000 / 100 ) / SUM( click ), 2 ) cpc  -- cpc\n" +
+            "FROM\n" +
 //                "    `stat_day_dsp_realtime` \n" +
-                "    `stat_day_dsp_offline` \n" +
-                "WHERE\n" +
-                "    time in ("+
-                etlDates.stream().map(e -> {return "'"+e+"'";}).collect(Collectors.joining(","))
-                +")  -- excel上传日志\n" +
-                "    AND plan_id IN ( "+ String.join(",",planIds) +" )  -- excel上传的计划\n" +
-                "GROUP BY time, plan_id ";
+            "    `stat_day_dsp_offline` \n" +
+            "WHERE\n" +
+            "    time in ("+
+            etlDates.stream().map(e -> {return "'"+e+"'";}).collect(Collectors.joining(","))
+            +")  -- excel上传日志\n" +
+            "    AND plan_id IN ( "+ String.join(",",planIds) +" )  -- excel上传的计划\n" +
+            "GROUP BY time, plan_id ";
 
         List<List<Object>> _return = new ArrayList<>();
 
@@ -99,20 +99,20 @@ public class ExcelDaoImp implements ExcelDao {
     @Override
     public List<List<Object>> QuerySQL3(List<String> etlDates,List<String> adslocationIds) {
         String sql="SELECT\n" +
-                "    CONCAT( time, '_', adslocation_id ) token, -- 匹配维度\n" +
-                "    time, -- 统计时间\n" +
-                "    ROUND( ( SUM( media_income ) ) / SUM( `show` ) * 1000, 2 ) 'ecpm'  --  实际单价\n" +
-                "FROM\n" +
-                "    `stat_day` \n" +
-                "WHERE\n" +
-                "    del = 'no' \n" +
-                "    AND time in ("+
-                etlDates.stream().map(e -> {return "'"+e+"'";}).collect(Collectors.joining(","))
-                +" ) \n" +
-                "    AND adslocation_id IN ( "+String.join(",",adslocationIds)+" ) \n" +
-                "    AND channel_id = 79 \n" +
-                "    AND is_upload = 'y' \n" +
-                "GROUP BY time, adslocation_id";
+            "    CONCAT( time, '_', adslocation_id ) token, -- 匹配维度\n" +
+            "    time, -- 统计时间\n" +
+            "    ROUND( ( SUM( media_income ) ) / SUM( `show` ) * 1000, 2 ) 'ecpm'  --  实际单价\n" +
+            "FROM\n" +
+            "    `stat_day` \n" +
+            "WHERE\n" +
+            "    del = 'no' \n" +
+            "    AND time in ("+
+            etlDates.stream().map(e -> {return "'"+e+"'";}).collect(Collectors.joining(","))
+            +" ) \n" +
+            "    AND adslocation_id IN ( "+String.join(",",adslocationIds)+" ) \n" +
+            "    AND channel_id = 79 \n" +
+            "    AND is_upload = 'y' \n" +
+            "GROUP BY time, adslocation_id";
 
         System.out.println("query3"+sql);
 
@@ -136,19 +136,19 @@ public class ExcelDaoImp implements ExcelDao {
     public List<List<Object>> querySQL4(List<String> etlDates,List<String> planIds) {
         // 查询返回结果  token          |aduser_id|alp1|alp2 |alp4|
         String sql="select\n" +
-                "concat(time,'_',plan_id) as token,\n" +
-                " SUM( alp_1 ) alp1, -- 支付宝新登\n" +
-                " SUM( alp_2 ) alp2, -- 支付宝拉活首唤\n" +
-                " SUM( alp_4 ) alp4 -- 支付宝MAU\n" +
-                "FROM\n" +
-                " `stat_day_dsp_realtime` -- 数据表名称\n" +
-                "WHERE\n" +
-                " time in ("+etlDates.stream().map(e -> "'"+e+"'").collect(Collectors.joining(","))+")  -- 统计日期\n" +
-                " and plan_id in ("+
-                String.join(",",planIds)
-                +")\n" +
-                "GROUP BY -- 查询分类 [日期, 广告主, 计划]\n" +
-                "concat(time,'_',plan_id) \n";
+            "concat(time,'_',plan_id) as token,\n" +
+            " SUM( alp_1 ) alp1, -- 支付宝新登\n" +
+            " SUM( alp_2 ) alp2, -- 支付宝拉活首唤\n" +
+            " SUM( alp_4 ) alp4 -- 支付宝MAU\n" +
+            "FROM\n" +
+            " `stat_day_dsp_realtime` -- 数据表名称\n" +
+            "WHERE\n" +
+            " time in ("+etlDates.stream().map(e -> "'"+e+"'").collect(Collectors.joining(","))+")  -- 统计日期\n" +
+            " and plan_id in ("+
+            String.join(",",planIds)
+            +")\n" +
+            "GROUP BY -- 查询分类 [日期, 广告主, 计划]\n" +
+            "concat(time,'_',plan_id) \n";
 
         List<List<Object>> _return = new ArrayList<>();
 
@@ -596,18 +596,18 @@ public class ExcelDaoImp implements ExcelDao {
     @Override
     public List<List<Object>> querySql5(List<String> etlDates, int aduserId) { // aduserId 20970
         String sql = "SELECT\n" +
-                "concat(time,'_',plan_id) as token," +
-                " ROUND( SUM( price ) / SUM( `show` ) * 1000, 2 ) ecpm,  -- 页面对应 汇总 ecpm\n" +
-                " sum(`show`) as `show`\n" +
-                "FROM\n" +
-                " `stat_oppkg` -- 查询表\n" +
-                "WHERE\n" +
-                " time in ("+
-                etlDates.stream().map(s -> "'"+s+"'").collect(Collectors.joining())
-                +")  -- 过滤时间\n" +
-                " and aduser_id = ?\n" +
-                "group by concat(time,'_',plan_id) \n" +
-                "having not(`show` is null or `show` = 0)";
+            "concat(time,'_',plan_id) as token," +
+            " ROUND( SUM( price ) / SUM( `show` ) * 1000, 2 ) ecpm,  -- 页面对应 汇总 ecpm\n" +
+            " sum(`show`) as `show`\n" +
+            "FROM\n" +
+            " `stat_oppkg` -- 查询表\n" +
+            "WHERE\n" +
+            " time in ("+
+            etlDates.stream().map(s -> "'"+s+"'").collect(Collectors.joining())
+            +")  -- 过滤时间\n" +
+            " and aduser_id = ?\n" +
+            "group by concat(time,'_',plan_id) \n" +
+            "having not(`show` is null or `show` = 0)";
         System.out.println("querySql5=======");
         System.out.println(sql);
 
@@ -669,39 +669,39 @@ public class ExcelDaoImp implements ExcelDao {
 //                "left join adslocation ad on main.adslocation_id = ad.id\n" +
 //                "left join os on os.id = ad.os_id ";
         String sql = "select\n" +
-                "    concat(time,'_',plan_id) as token,\n" +
-                "    aduser.nickname , -- 广告主名称\n" +
-                "    plan.`name`, -- 计划名称\n" +
-                "    main.* \n" +
-                "FROM (\n" +
-                "    SELECT\n" +
-                "        time,-- 日期\n" +
-                "        aduser_id,-- 代码位ID\n" +
-                "        plan_id,-- 计划ID\n" +
-                "        SUM( req ) req,-- 请求\n" +
-                "        SUM( bid ) bid,-- 竞价\n" +
-                "        SUM( `show` ) `show`,-- 曝光\n" +
-                "        SUM( click ) click,-- 点击\n" +
-                "        ROUND( SUM( cost / 1000 / 100 ), 2 ) cost,-- 花费\n" +
-                "        ROUND( SUM( cost / 1000 / 100 ) / SUM( `show` ) * 1000, 2 ) ecpm,-- ecpm\n" +
-                "        ROUND( SUM( cost / 1000 / 100 ) / SUM( click ), 2 ) cpc,-- cpc\n" +
-                "        ROUND( SUM( bid ) / SUM( req ) * 100, 2 ) bidRate,-- 竞价率\n" +
-                "        ROUND( SUM( `show` ) / SUM( bid ) * 100, 2 ) bidSuccessRate,-- 竞价成功率\n" +
-                "        ROUND( SUM( click ) / SUM( `show` ) * 100, 2 ) ctr -- 点击率 \n" +
-                "    FROM stat_day_dsp_offline FORCE INDEX ( find ) -- 查询表\n" +
-                "    WHERE time in ("+
-                etlDates.stream().map(s -> "'"+s+"'").collect(Collectors.joining())
-                +") -- 日期过滤\n" +
-                "    AND aduser_id IN ( ? ) -- 广告主ID     \n" +
-                "    GROUP BY-- 分组 (日期, 广告主ID, 计划ID)\n" +
-                "        `time`,\n" +
-                "        `aduser_id`,\n" +
-                "        `plan_id` \n" +
-                "    ORDER BY\n" +
-                "        `req` DESC -- 排序, <请求>\n" +
-                ") AS main\n" +
-                "LEFT JOIN `user` aduser ON aduser.id = main.aduser_id\n" +
-                "LEFT JOIN plan ON plan.id = main.plan_id";
+            "    concat(time,'_',plan_id) as token,\n" +
+            "    aduser.nickname , -- 广告主名称\n" +
+            "    plan.`name`, -- 计划名称\n" +
+            "    main.* \n" +
+            "FROM (\n" +
+            "    SELECT\n" +
+            "        time,-- 日期\n" +
+            "        aduser_id,-- 代码位ID\n" +
+            "        plan_id,-- 计划ID\n" +
+            "        SUM( req ) req,-- 请求\n" +
+            "        SUM( bid ) bid,-- 竞价\n" +
+            "        SUM( `show` ) `show`,-- 曝光\n" +
+            "        SUM( click ) click,-- 点击\n" +
+            "        ROUND( SUM( cost / 1000 / 100 ), 2 ) cost,-- 花费\n" +
+            "        ROUND( SUM( cost / 1000 / 100 ) / SUM( `show` ) * 1000, 2 ) ecpm,-- ecpm\n" +
+            "        ROUND( SUM( cost / 1000 / 100 ) / SUM( click ), 2 ) cpc,-- cpc\n" +
+            "        ROUND( SUM( bid ) / SUM( req ) * 100, 2 ) bidRate,-- 竞价率\n" +
+            "        ROUND( SUM( `show` ) / SUM( bid ) * 100, 2 ) bidSuccessRate,-- 竞价成功率\n" +
+            "        ROUND( SUM( click ) / SUM( `show` ) * 100, 2 ) ctr -- 点击率 \n" +
+            "    FROM stat_day_dsp_offline FORCE INDEX ( find ) -- 查询表\n" +
+            "    WHERE time in ("+
+            etlDates.stream().map(s -> "'"+s+"'").collect(Collectors.joining())
+            +") -- 日期过滤\n" +
+            "    AND aduser_id IN ( ? ) -- 广告主ID     \n" +
+            "    GROUP BY-- 分组 (日期, 广告主ID, 计划ID)\n" +
+            "        `time`,\n" +
+            "        `aduser_id`,\n" +
+            "        `plan_id` \n" +
+            "    ORDER BY\n" +
+            "        `req` DESC -- 排序, <请求>\n" +
+            ") AS main\n" +
+            "LEFT JOIN `user` aduser ON aduser.id = main.aduser_id\n" +
+            "LEFT JOIN plan ON plan.id = main.plan_id";
         System.out.println("querySql6=======");
         System.out.println(sql);
 
@@ -723,23 +723,23 @@ public class ExcelDaoImp implements ExcelDao {
     @Override
     public List<List<Object>> querySql7(List<String> etlDates, int aduserId) {
         String sql ="SELECT\n" +
-                "    concat(time,'_',plan_id) as token, -- 时间_计划id \n" +
-                "    aduser_id, -- 广告主ID\n" +
-                "    ROUND( SUM( bid ) / SUM( req ) * 100, 2 ) bidRate, -- 竞价绿\n" +
-                "    ROUND( SUM( `show` ) / SUM( bid ) * 100, 2 ) bidSuccessRate, -- 竞价成功率\n" +
-                "    SUM(alp_2) alp2cr  -- 支付宝拉活首唤\n" +
-                "FROM\n" +
-                "    `stat_day_dsp_realtime` \n" +
-                "WHERE\n" +
-                "    time in ("+
-                etlDates.stream().map(s -> "'"+s+"'").collect(Collectors.joining())
-                +")  -- 统计时间\n" +
-                "    AND aduser_id IN ( ? )  -- 广告主ID \n" +
-                "GROUP BY -- 分组 (时间, 广告主ID, 计划ID)\n" +
-                "    `time`,\n" +
-                "    `aduser_id`,\n" +
-                "    `plan_id` \n" +
-                "ORDER BY `bidRate` DESC -- 排序";
+            "    concat(time,'_',plan_id) as token, -- 时间_计划id \n" +
+            "    aduser_id, -- 广告主ID\n" +
+            "    ROUND( SUM( bid ) / SUM( req ) * 100, 2 ) bidRate, -- 竞价绿\n" +
+            "    ROUND( SUM( `show` ) / SUM( bid ) * 100, 2 ) bidSuccessRate, -- 竞价成功率\n" +
+            "    SUM(alp_2) alp2cr  -- 支付宝拉活首唤\n" +
+            "FROM\n" +
+            "    `stat_day_dsp_realtime` \n" +
+            "WHERE\n" +
+            "    time in ("+
+            etlDates.stream().map(s -> "'"+s+"'").collect(Collectors.joining())
+            +")  -- 统计时间\n" +
+            "    AND aduser_id IN ( ? )  -- 广告主ID \n" +
+            "GROUP BY -- 分组 (时间, 广告主ID, 计划ID)\n" +
+            "    `time`,\n" +
+            "    `aduser_id`,\n" +
+            "    `plan_id` \n" +
+            "ORDER BY `bidRate` DESC -- 排序";
         System.out.println("querySql7=======");
         System.out.println(sql);
 
@@ -890,7 +890,7 @@ public class ExcelDaoImp implements ExcelDao {
                 }
 
 //                System.out.println(row.getCell(i));
-                    row.getCell(i).setCellStyle(borderStyle);
+                row.getCell(i).setCellStyle(borderStyle);
             }
             //设置红色
             if(multiPlanNames.contains(col1)){
@@ -955,5 +955,31 @@ public class ExcelDaoImp implements ExcelDao {
         return workbook;
     }
 
-
+    @Override
+    public List<List<Object>> querySql8(List<String> etlDates,List<String> planIds) {
+        String sql ="select \n" +
+            "    concat(time,'_',plan_id) as token,\n" +
+            "    ROUND( SUM( price )/ SUM( `show` )* 1000, 2  ) ecpm \n" +
+            "from \n" +
+            "     `stat_oppkg` \n" +
+            "where \n" +
+            "    time in ('"+
+            etlDates.stream().map(s -> "'"+s+"'").collect(Collectors.joining())
+            +"')\n" +
+            "    AND plan_id IN ( "+ String.join(",",planIds) +" )  -- excel上传的计划\n" +
+            "group by \n" +
+            "    concat(time,'_',plan_id)";
+        List<List<Object>> _return = new ArrayList<>();
+        JdbcUtils.queryBatch(sql, null, rs ->{
+            while(rs.next()){
+                int colCnt = rs.getMetaData().getColumnCount();
+                List<Object> rsList = new ArrayList<>(colCnt);
+                for(int i=1;i<=colCnt;i++){
+                    rsList.add(rs.getObject(i));
+                }
+                _return.add(rsList);
+            }
+        });
+        return _return;
+    }
 }

@@ -16,8 +16,8 @@ import java.util.Set;
  */
 public interface ExcelDao {
     /**
-      *  -- SQL01 (查询媒体计划列) 匹配规则字段(计划名称)
-      */
+     *  -- SQL01 (查询媒体计划列) 匹配规则字段(计划名称)
+     */
     List<List<Object>> QuerySQL1();
 
     /**
@@ -29,7 +29,7 @@ public interface ExcelDao {
     /**
      * -- SQL03 实际单价, 实际消耗 ; 匹配规则字段(token)
      *
-      */
+     */
     List<List<Object>> QuerySQL3(List<String> etlDates, List<String> adslocationIds);
 
     /**
@@ -106,5 +106,13 @@ public interface ExcelDao {
      * @throws IOException
      */
     Workbook generateTaobaoOutWorkBook(InputStream is, String fileName, List<List<Object>> datas, Set<String> multiPlanNames) throws IOException;
+
+    /**
+     * 20210719
+     * 获取真实的ecpm
+     * @param etlDates
+     * @return
+     */
+    List<List<Object>> querySql8(List<String> etlDates,List<String> planIds);
 
 }
