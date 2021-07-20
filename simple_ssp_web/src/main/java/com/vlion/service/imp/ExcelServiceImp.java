@@ -76,6 +76,11 @@ public class ExcelServiceImp implements ExcelService {
         List<List<Object>> query4Res = zd.querySQL4(etlDateList, innerPlanIds); //token          |aduser_id|alp1|alp2 |alp4|
         Map<String, List<Object>> planId4Map = getTokenMap(query4Res); // key: 日期_计划id
 
+
+        // 查询8,获取真实的ecpm
+        List<List<Object>> query8Res = zd.querySql8(etlDateList, innerPlanIds);
+        Map<String, List<Object>> planId8Map = getTokenMap(query8Res);
+
         //开始组装
         List<List<Object>> generatedList = excelListMap.entrySet().stream().map(e -> {
             String key = e.getKey();  //date_channel
@@ -113,15 +118,19 @@ public class ExcelServiceImp implements ExcelService {
                 col9 = Utils.getObjectValueDouble(planIdValueList.get(8)); // cpc
             }
 
+            List<Object> planIdEcpmMap = planId8Map.get(datePlanIdKey);
 
             //拼接sql3的数据,广告位id
             String dateAdslotIdKey = col0 + "_" + planNameObjects.get(3);
 
             List<Object> listAdsoltId = adsoltId3Map.get(dateAdslotIdKey);
             double col10 = 0.0;
-            if (listAdsoltId != null) {
-                col10 = Utils.getObjectValueDouble(listAdsoltId.get(2)); //实际单价
+            if(planIdEcpmMap!= null && planIdEcpmMap.get(1)!=null){
+                col10 = Utils.getObjectValueDouble(planIdEcpmMap.get(1));
             }
+//            if (listAdsoltId != null) {
+//                col10 = Utils.getObjectValueDouble(listAdsoltId.get(2)); //实际单价
+//            }
 
             double col11 = 0.0;
             double col13 = 0.0;

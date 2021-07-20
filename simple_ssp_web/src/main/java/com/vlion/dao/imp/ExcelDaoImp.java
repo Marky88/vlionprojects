@@ -963,12 +963,17 @@ public class ExcelDaoImp implements ExcelDao {
             "from \n" +
             "     `stat_oppkg` \n" +
             "where \n" +
-            "    time in ('"+
+            "    time in ("+
             etlDates.stream().map(s -> "'"+s+"'").collect(Collectors.joining())
-            +"')\n" +
+            +")\n" +
             "    AND plan_id IN ( "+ String.join(",",planIds) +" )  -- excel上传的计划\n" +
             "group by \n" +
             "    concat(time,'_',plan_id)";
+
+
+        System.out.println("sql8:");
+        System.out.println(sql);
+        System.out.println();
         List<List<Object>> _return = new ArrayList<>();
         JdbcUtils.queryBatch(sql, null, rs ->{
             while(rs.next()){
