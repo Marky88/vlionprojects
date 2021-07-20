@@ -987,4 +987,37 @@ public class ExcelDaoImp implements ExcelDao {
         });
         return _return;
     }
+
+    @Override
+    public List<List<Object>> querySql9(List<String> etlDates,int aduserId) {
+        String sql ="select \n" +
+            "    concat(time,'_',plan_id) as token,\n" +
+            "    ROUND( SUM( price )/ SUM( `show` )* 1000, 2  ) ecpm \n" +
+            "from \n" +
+            "     `stat_oppkg` \n" +
+            "where \n" +
+            "    time in ("+
+            etlDates.stream().map(s -> "'"+s+"'").collect(Collectors.joining())
+            +")\n" +
+            "    AND aduser_id = "+ aduserId +"  -- excel上传的计划\n" +
+            "group by \n" +
+            "    concat(time,'_',plan_id)";
+
+
+        System.out.println("sql9:");
+        System.out.println(sql);
+        System.out.println();
+        List<List<Object>> _return = new ArrayList<>();
+        JdbcUtils.queryBatch(sql, null, rs ->{
+            while(rs.next()){
+                int colCnt = rs.getMetaData().getColumnCount();
+                List<Object> rsList = new ArrayList<>(colCnt);
+                for(int i=1;i<=colCnt;i++){
+                    rsList.add(rs.getObject(i));
+                }
+                _return.add(rsList);
+            }
+        });
+        return _return;
+    }
 }

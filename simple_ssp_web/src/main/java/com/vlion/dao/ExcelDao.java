@@ -114,5 +114,7 @@ public interface ExcelDao {
      * @return
      */
     List<List<Object>> querySql8(List<String> etlDates,List<String> planIds);
+    List<List<Object>> querySql9(List<String> etlDates,int aduserId);
+
 
 }

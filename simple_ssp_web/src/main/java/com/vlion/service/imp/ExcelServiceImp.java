@@ -351,9 +351,12 @@ public class ExcelServiceImp implements ExcelService {
         List<List<Object>> res1 = zd.querySql5(etlDateList, aduserId); //投放计划,包名优化
         List<List<Object>> res2 = zd.querySql6(etlDateList, aduserId); //数据报告,投放统计,下载的数据
         List<List<Object>> res3 = zd.querySql7(etlDateList, aduserId); //数据报告,实时投放统计页面数据
+        List<List<Object>> res4 = zd.querySql9(etlDateList, aduserId);
         Map<String, List<Object>> tokenMap1 = getTokenMap(res1);// key为 date_计划id
         Map<String, List<Object>> tokenMap2 = getTokenMap(res2);// key为 date_计划id
         Map<String, List<Object>> tokenMap3 = getTokenMap(res3); // key为 date_计划id
+        Map<String, List<Object>> tokenMap4 = getTokenMap(res4); // key为 date_计划id
+
 
         //转换tokenMap3
         List<List<Object>> adSoltPlanIdList = zd.QuerySQL1(); //所有的计划id,name,media_id,adsolcation_id
@@ -412,9 +415,13 @@ public class ExcelServiceImp implements ExcelService {
 
 
             List<Object> list1 = tokenMap1.get(newKey);
-            if(list1!=null){
-                col12 = Utils.getObjectValueDouble(list1.get(1));// M列ECPM
-                outList[12]=col12;// 成交价
+//            if(list1!=null){
+//                col12 = Utils.getObjectValueDouble(list1.get(1));// M列ECPM
+//                outList[12]=col12;// 成交价
+//            }
+            if(null != tokenMap4.get(newKey)){
+                col12 = Utils.getObjectValueDouble(tokenMap4.get(newKey).get(1));// M列ECPM
+                outList[12]=col12;
             }
 
             List<Object> list2 = tokenMap2.get(newKey);
