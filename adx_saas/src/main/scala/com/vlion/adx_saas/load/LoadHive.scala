@@ -55,14 +55,14 @@ object LoadHive {
                |group by
                |t1.request_id
                |
-               |""".stripMargin)
+               |""".stripMargin).createOrReplaceTempView("meidiaReq")
 
 
         val dspReqDF = spark.sql(
             s"""
                |select
                |    request_id,
-               |    null as dsp_id,
+               |    dsp_id as dsp_id, -- dsp定向id
                |    null as media_id,
                |    null as posid_id,
                |    null as pkg_id,
@@ -70,7 +70,7 @@ object LoadHive {
                |    null as platform_id,
                |    null as style_id,
                |    null as mlevel_id,
-               |    count(1) as dsp_req, -- 多个
+               |    1 as dsp_req, -- 多个
                |    count(if(staus_code='1',1,null)) as dsp_fill_req,
                |    null as dsp_win,
                |    null as ssp_win,
@@ -88,17 +88,88 @@ object LoadHive {
                |from
                |    ods.adx_saas_dsp_req
                |where etl_date='${etlDate}' and etl_hour = '$etlHour'
-               |group by request_id
+               |group by request_id,dsp_id
                |
+               |""".stripMargin).createOrReplaceTempView("dspReq")
+
+        val joinedDF = spark.sql(
+            s"""
+               |select
+               |    t1.request_id,
+               |    t2.dsp_id,
+               |    t1.media_id,
+               |    t1.posid_id,
+               |    t1.pkg_id,
+               |    t1.country_id,
+               |    t1.platform_id,
+               |    t1.style_id,
+               |    t1.mlevel_id,
+               |    t2.dsp_req,
+               |    t2.dsp_fill_req,
+               |    null as dsp_win,
+               |    null as ssp_win,
+               |    t2.sum_dsp_floor_price,
+               |    t2.count_dsp_floor_price,
+               |    t1.sum_ssp_floor_price, -- 只有1个,有价格的算,没价格的不算,后面求avg
+               |    null as imp,
+               |    null as clk,
+               |    null as revenue,
+               |    null as cost,
+               |    t2.dsp_req_timeout,
+               |    t2.dsp_req_parse_error,
+               |    t2.dsp_req_invalid_ad,
+               |    t2.dsp_req_no_bid
+               |from
+               |    meidiaReq t1
+               |left join
+               |    dspReq t2
+               |on t1.request_id = t2.request_id
                |""".stripMargin)
 
+//
+//        val mediaRespDF = spark.sql(
+//            s"""
+//               |
+//               |select
+//               |    t1.request_id,
+//               |    max(t2.dsp_id) as dsp_id,
+//               |    null as media_id,
+//               |    null as posid_id,
+//               |    null as pkg_id,
+//               |    null as country_id,
+//               |    null as platform_id,
+//               |    null as style_id,
+//               |    null as mlevel_id,
+//               |    null as dsp_req,
+//               |    null as dsp_fill_req,
+//               |    null as dsp_win,
+//               |    null as ssp_win,
+//               |    null as sum_dsp_floor_price,
+//               |    null as count_dsp_floor_price,
+//               |    null as sum_ssp_floor_price,
+//               |    null as imp,
+//               |    null as clk,
+//               |    null as revenue,
+//               |    null as cost,
+//               |    null as dsp_req_timeout,
+//               |    null as dsp_req_parse_error,
+//               |    null as dsp_req_invalid_ad,
+//               |    null as dsp_req_no_bid
+//               |from
+//               |    ods.adx_saas_media_resp t1
+//               |left join target t2
+//               |on t1.dsp_id = t2.id
+//               |where etl_date='${etlDate}' and etl_hour = '$etlHour'
+//               |group by t1.request_id
+//               |
+//               |""".stripMargin)
 
-        val mediaRespDF = spark.sql(
+   /*     val mediaRespDF = spark.sql(
             s"""
                |
                |select
-               |    t1.request_id,
-               |    max(t2.dsp_id) as dsp_id,
+               |    request_id,
+               |    dsp_id,
                |    null as media_id,
                |    null as posid_id,
                |    null as pkg_id,
@@ -122,20 +193,18 @@ object LoadHive {
                |    null as dsp_req_invalid_ad,
                |    null as dsp_req_no_bid
                |from
-               |    ods.adx_saas_media_resp t1
-               |left join target t2
-               |on t1.dsp_id = t2.id
+               |    ods.adx_saas_media_resp
                |where etl_date='${etlDate}' and etl_hour = '$etlHour'
                |group by t1.request_id
                |
-               |""".stripMargin)
+               |""".stripMargin)*/
 
 
         val impDF = spark.sql(
             s"""
                |select
                |    request_id,
-               |    null as dsp_id,
+               |    dsp_id, -- 定向id,后面需要转换
                |    null as media_id,
                |    null as posid_id,
                |    null as pkg_id,
@@ -162,7 +231,7 @@ object LoadHive {
                |    ods.adx_saas_imp
                |where etl_date='${etlDate}' and etl_hour = '$etlHour'
                |group by
-               |    request_id
+               |    request_id,dsp_id
                |""".stripMargin)
 
 
@@ -170,7 +239,7 @@ object LoadHive {
             s"""
                |select
                |    request_id,
-               |    null as dsp_id,
+               |    dsp_id,
                |    null as media_id,
                |    null as posid_id,
                |    null as pkg_id,
@@ -197,14 +266,14 @@ object LoadHive {
                |    ods.adx_saas_clk
                |where etl_date='${etlDate}' and etl_hour = '$etlHour'
                |group by
-               |    request_id
+               |    request_id,dsp_id
                |""".stripMargin)
 
         val sspWinDF = spark.sql(
             s"""
                |select
                |    request_id,
-               |    null as dsp_id,
+               |    dsp_id,
                |    null as media_id,
                |    null as posid_id,
                |    null as pkg_id,
@@ -231,7 +300,7 @@ object LoadHive {
                |    ods.adx_saas_ssp_win
                |where
                |    etl_date='${etlDate}' and etl_hour = '$etlHour'
-               |group by request_id
+               |group by request_id,dsp_id
                |""".stripMargin)
 
 
@@ -239,7 +308,7 @@ object LoadHive {
             s"""
                |select
                |    request_id,
-               |    null as dsp_id,
+               |    dsp_id,
                |    null as media_id,
                |    null as posid_id,
                |    null as pkg_id,
@@ -266,15 +335,19 @@ object LoadHive {
                |    ods.adx_saas_dsp_win
                |where
                |    etl_date='${etlDate}' and etl_hour = '$etlHour'
-               |group by request_id
+               |group by request_id,dsp_id
                |""".stripMargin)
-        val unionDF = meidiaReqDF union dspReqDF union mediaRespDF union impDF union clkDF union sspWinDF union dspWinDF
+
+
+
+        val unionDF = joinedDF union impDF union clkDF union sspWinDF union dspWinDF
+
         unionDF.createOrReplaceTempView("u1")
         spark.sql(
             """
               |select
               | request_id,
-              | max(dsp_id) as dsp_id,
+              | dsp_id,
               | max(media_id) as media_id,
               | max(posid_id) as posid_id,
               | max(pkg_id) as pkg_id,
@@ -283,24 +356,24 @@ object LoadHive {
               | max(style_id) as style_id,
               | max(mlevel_id) as mlevel_id,
               | max(dsp_req) as dsp_req,
-              | max(dsp_fill_req) as dsp_fill_req,
+              | sum(dsp_fill_req) as dsp_fill_req,
               | max(dsp_win) as dsp_win,
               | max(ssp_win) as ssp_win,
-              | max(sum_dsp_floor_price) as sum_dsp_floor_price,
-              | max(count_dsp_floor_price) as count_dsp_floor_price,
+              | sum(sum_dsp_floor_price) as sum_dsp_floor_price,
+              | sum(count_dsp_floor_price) as count_dsp_floor_price,
               | max(sum_ssp_floor_price) as sum_ssp_floor_price,
               | max(imp) imp,
               | max(clk) clk,
               | max(revenue) revenue,
               | max(cost) cost,
-              | max(dsp_req_timeout) dsp_req_timeout,
-              | max(dsp_req_parse_error) dsp_req_parse_error,
-              | max(dsp_req_invalid_ad) dsp_req_invalid_ad,
-              | max(dsp_req_no_bid) as dsp_req_no_bid
+              | sum(dsp_req_timeout) dsp_req_timeout,
+              | sum(dsp_req_parse_error) dsp_req_parse_error,
+              | sum(dsp_req_invalid_ad) dsp_req_invalid_ad,
+              | sum(dsp_req_no_bid) as dsp_req_no_bid
               |from
               | u1
               |group by
-              | request_id
+              | request_id,dsp_id
               |""".stripMargin).createOrReplaceTempView("union_table")
 
 

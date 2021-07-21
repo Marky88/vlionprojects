@@ -61,6 +61,37 @@ object OfflineStatistics {
 
         val resDF = spark.sql(
             s"""
+               |select
+               |    t1.time,
+               |    t1.hour,
+               |    t1.time_format,
+               |    t2.dsp_id,  -- 替换为mysql中的
+               |    t1.media_id   ,
+               |    t1.posid_id   ,
+               |    t1.pkg_id     ,
+               |    t1.country_id ,
+               |    t1.platform_id,
+               |    t1.style_id   ,
+               |    t1.mlevel_id,
+               |    t1.dsp_req,
+               |    t1.dsp_fill_req,
+               |    t1.dsp_win,
+               |    t1.ssp_win,
+               |    t1.dsp_floor,
+               |    t1.ssp_floor,
+               |    t1.dsp_qps,
+               |    t1.dsp_win_price,
+               |    t1.imp,
+               |    t1.clk,
+               |    t1.revenue,
+               |    t1.cost,
+               |    t1.dsp_req_timeout,
+               |    t1.dsp_req_parse_error,
+               |    t1.dsp_req_invalid_ad,
+               |    t1.dsp_req_no_bid,
+               |    t1.del
+               |from
+               |(
                | -- 补充-1
                |select
                |    time,
@@ -134,6 +165,10 @@ object OfflineStatistics {
                |    style_id,
                |    mlevel_id
                |) t
+               |) t1
+               |left join
+               |target t2
+               |on t1.dsp_id = t2.id
                |""".stripMargin)
 
         resDF.show(false)
