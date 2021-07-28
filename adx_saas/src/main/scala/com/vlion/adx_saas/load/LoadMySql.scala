@@ -28,7 +28,7 @@ object LoadMySql {
         genreate2("pkg")
     }
 
-    private def generateMysqlTableView(mysqlTableName: String)(implicit spark:SparkSession,url: String, user: String, password: String) = {
+    private def generateMysqlTableView(mysqlTableName: String)(spark:SparkSession,url: String, user: String, password: String) = {
         spark.read.format("jdbc")
             .option("url", url)
             .option("user", user)

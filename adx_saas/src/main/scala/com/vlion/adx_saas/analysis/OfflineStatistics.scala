@@ -1,8 +1,8 @@
 package com.vlion.adx_saas.analysis
 
-import java.sql.{Connection, DriverManager, PreparedStatement}
+import java.sql.DriverManager
 import java.text.SimpleDateFormat
-import java.util.{Date, Locale, TimeZone}
+import java.util.{Date, TimeZone}
 
 import com.vlion.adx_saas.jdbc.MySQL
 import org.apache.spark.sql.SparkSession
@@ -49,8 +49,8 @@ object OfflineStatistics {
     }
 
     def hourSummary(implicit spark: SparkSession, etlDate: String, etlHour: String): Unit = {
-//        val sdfDay = new SimpleDateFormat("yyyy-MM-dd")
-//        val dayTimestamp = sdfDay.parse(s"$etlDate").getTime / 1000 -57600 // 转换成utc时间的天
+        //        val sdfDay = new SimpleDateFormat("yyyy-MM-dd")
+        //        val dayTimestamp = sdfDay.parse(s"$etlDate").getTime / 1000 -57600 // 转换成utc时间的天
 
         // 当前小时的时间戳
         val dayHourTimestamp = new SimpleDateFormat("yyyy-MM-dd HH").parse(s"$etlDate $etlHour").getTime / 1000
@@ -61,42 +61,11 @@ object OfflineStatistics {
 
         val resDF = spark.sql(
             s"""
-               |select
-               |    t1.time,
-               |    t1.hour,
-               |    t1.time_format,
-               |    t2.dsp_id,  -- 替换为mysql中的
-               |    t1.media_id   ,
-               |    t1.posid_id   ,
-               |    t1.pkg_id     ,
-               |    t1.country_id ,
-               |    t1.platform_id,
-               |    t1.style_id   ,
-               |    t1.mlevel_id,
-               |    t1.dsp_req,
-               |    t1.dsp_fill_req,
-               |    t1.dsp_win,
-               |    t1.ssp_win,
-               |    t1.dsp_floor,
-               |    t1.ssp_floor,
-               |    t1.dsp_qps,
-               |    t1.dsp_win_price,
-               |    t1.imp,
-               |    t1.clk,
-               |    t1.revenue,
-               |    t1.cost,
-               |    t1.dsp_req_timeout,
-               |    t1.dsp_req_parse_error,
-               |    t1.dsp_req_invalid_ad,
-               |    t1.dsp_req_no_bid,
-               |    t1.del
-               |from
                |(
-               | -- 补充-1
                |select
-               |    time,
-               |    hour,
-               |    time_format,
+               |    ${dayTimestamp} as time,
+               |    $dayHourTimestamp as hour,
+               |    '$etlDate' as time_format, -- 选取的是北京的日期
                |    if(dsp_id is null or dsp_id='','-1',dsp_id) as dsp_id,
                |    if(media_id    is null or media_id     ='','-1',media_id     ) as  media_id   ,
                |    if(posid_id    is null or posid_id     ='','-1',posid_id     ) as  posid_id   ,
@@ -105,47 +74,16 @@ object OfflineStatistics {
                |    if(platform_id is null or platform_id  ='','-1',platform_id  ) as  platform_id,
                |    if(style_id    is null or style_id     ='','-1',style_id     ) as  style_id   ,
                |    if(mlevel_id   is null or mlevel_id    ='','-1',mlevel_id    ) as  mlevel_id,
-               |    dsp_req,
-               |    dsp_fill_req,
-               |    dsp_win,
-               |    ssp_win,
-               |    dsp_floor,
-               |    ssp_floor,
-               |    dsp_qps,
-               |    dsp_win_price,
-               |    imp,
-               |    clk,
-               |    revenue,
-               |    cost,
-               |    dsp_req_timeout,
-               |    dsp_req_parse_error,
-               |    dsp_req_invalid_ad,
-               |    dsp_req_no_bid,
-               |    del
-               |from
-               |(
-               |select
-               |    ${dayTimestamp} as time,
-               |    $dayHourTimestamp as hour,
-               |    '$etlDate' as time_format, -- 选取的是北京的日期
-               |    dsp_id,
-               |    media_id,
-               |    posid_id,
-               |    pkg_id,
-               |    country_id,
-               |    platform_id,
-               |    style_id,
-               |    mlevel_id,
+               |    null as ssp_req,
                |    sum(dsp_req) as dsp_req,
                |    sum(dsp_fill_req) as dsp_fill_req,
-               |    count(dsp_win) as dsp_win,
-               |    count(ssp_win) as ssp_win,
-               |    sum(sum_dsp_floor_price) / sum(count_dsp_floor_price) as dsp_floor,
-               |    avg(sum_ssp_floor_price) as ssp_floor,
-               |    sum(dsp_req) / 3600 as dsp_qps,
-               |    avg(revenue) as dsp_win_price,
-               |    count(imp) as imp,
-               |    count(clk) as clk,
+               |    sum(dsp_win) as dsp_win,
+               |    sum(ssp_win) as ssp_win,
+               |    sum(sum_dsp_floor_price) as dsp_floor,
+               |    null as ssp_floor,
+               |    sum(dsp_win_price) as dsp_win_price,
+               |    sum(imp) as imp,
+               |    sum(clk) as clk,
                |    sum(revenue) as revenue,
                |    sum(cost) as cost,
                |    sum(dsp_req_timeout) as dsp_req_timeout,
@@ -153,23 +91,94 @@ object OfflineStatistics {
                |    sum(dsp_req_invalid_ad) as dsp_req_invalid_ad,
                |    sum(dsp_req_no_bid) as dsp_req_no_bid,
                |    'no' as del
-               |from
-               |    union_table
+               |    from
+               |    (
+               |        select
+               |            t1.request_id,
+               |            t2.dsp_id, -- 切换回来
+               |            t1.media_id,
+               |            t1.posid_id,
+               |            t1.pkg_id,
+               |            t1.country_id,
+               |            t1.platform_id,
+               |            t1.style_id,
+               |            t1.mlevel_id,
+               |            null as ssp_req, -- ssp_req,有问题..,-1的数据
+               |            t1.dsp_req,
+               |            t1.dsp_fill_req,
+               |            t1.dsp_win,
+               |            t1.ssp_win,
+               |            t1.sum_dsp_floor_price,
+               |            null as ssp_floor,   -- -1的数据
+               |            t1.dsp_win_price,
+               |            t1.imp,
+               |            t1.clk,
+               |            t1.revenue,
+               |            t1.cost,
+               |            t1.dsp_req_timeout,
+               |            t1.dsp_req_parse_error,
+               |            t1.dsp_req_invalid_ad,
+               |            t1.dsp_req_no_bid
+               |        from
+               |        union_table t1
+               |        left join
+               |        target t2
+               |        on t1.dsp_id = t2.id
+               |    ) t
                |group by
-               |    dsp_id,
-               |    media_id,
-               |    posid_id,
-               |    pkg_id,
-               |    country_id,
-               |    platform_id,
-               |    style_id,
-               |    mlevel_id
-               |) t
-               |) t1
-               |left join
-               |target t2
-               |on t1.dsp_id = t2.id
+               |    if(dsp_id is null or dsp_id='','-1',dsp_id) ,
+               |    if(media_id    is null or media_id     ='','-1',media_id     )   ,
+               |    if(posid_id    is null or posid_id     ='','-1',posid_id     )   ,
+               |    if(pkg_id      is null or pkg_id       ='','-1',pkg_id       )    ,
+               |    if(country_id  is null or country_id   ='','-1',country_id   ) ,
+               |    if(platform_id is null or platform_id  ='','-1',platform_id  ) ,
+               |    if(style_id    is null or style_id     ='','-1',style_id     )    ,
+               |    if(mlevel_id   is null or mlevel_id    ='','-1',mlevel_id    )
+               |)
+               |union all
+               |(
+               |    select
+               |    ${dayTimestamp} as time,
+               |    $dayHourTimestamp as hour,
+               |    '$etlDate' as time_format, -- 选取的是北京的日期
+               |    -2 as dsp_id,
+               |    if(media_id    is null or media_id     ='','-1',media_id     ) as  media_id   ,
+               |    if(posid_id    is null or posid_id     ='','-1',posid_id     ) as  posid_id   ,
+               |    if(pkg_id      is null or pkg_id       ='','-1',pkg_id       ) as  pkg_id     ,
+               |    if(country_id  is null or country_id   ='','-1',country_id   ) as  country_id ,
+               |    if(platform_id is null or platform_id  ='','-1',platform_id  ) as  platform_id,
+               |    if(style_id    is null or style_id     ='','-1',style_id     ) as  style_id   ,
+               |    if(mlevel_id   is null or mlevel_id    ='','-1',mlevel_id    ) as  mlevel_id,
+               |        sum(ssp_req) as ssp_req,
+               |        null as dsp_req,
+               |        null dsp_fill_req,
+               |        null dsp_win,
+               |        null ssp_win,
+               |        null as dsp_floor,
+               |        sum(sum_ssp_floor_price) as ssp_floor,
+               |        null as dsp_win_price,
+               |        null as imp,
+               |        null as clk,
+               |        null as revenue,
+               |        null as cost,
+               |        null as dsp_req_timeout,
+               |        null dsp_req_parse_error ,
+               |        null dsp_req_invalid_ad,
+               |        null dsp_req_no_bid,
+               |        'no' as del
+               |    from
+               |    meidiaReq
+               |    group by
+               |    if(media_id    is null or media_id     ='','-1',media_id     )   ,
+               |    if(posid_id    is null or posid_id     ='','-1',posid_id     )   ,
+               |    if(pkg_id      is null or pkg_id       ='','-1',pkg_id       )    ,
+               |    if(country_id  is null or country_id   ='','-1',country_id   ) ,
+               |    if(platform_id is null or platform_id  ='','-1',platform_id  ) ,
+               |    if(style_id    is null or style_id     ='','-1',style_id     )    ,
+               |    if(mlevel_id   is null or mlevel_id    ='','-1',mlevel_id    )
+               |)
                |""".stripMargin)
+
 
         resDF.show(false)
         resDF
