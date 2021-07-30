@@ -29,10 +29,14 @@ object AdxSaasDsp {
         val etlDate = args(0)
         val etlHour = args(1)
         // 1.2.2 按小时统计广告计划消耗数据
-        LoadMySql.readMysql(spark) // 加载mysql的数据
+//        LoadMySql.readMysql(spark) // 加载mysql的数据
         OfflineStatistics.preprocessTable(spark,etlDate,etlHour)
         OfflineStatistics.planSummary(spark,etlDate,etlHour)
         OfflineStatistics.creativeSummary(spark,etlDate,etlHour)
         OfflineStatistics.downstreamSummary(spark,etlDate,etlHour)
+        OfflineStatistics.preprocessTable(spark,etlDate,etlHour)
+
+        OfflineStatistics.conversionDaySummary(spark,etlDate)
+//        OfflineStatistics.deviceConversionDay(spark,etlDate)
     }
 }

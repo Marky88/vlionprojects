@@ -17,7 +17,6 @@ object Task {
         val spark = SparkSession
             .builder()
             //     .master("local[*]")
-            .appName("Ssp")
             .config("hive.metastore.uris","trift://www.bigdata02.com:9083")
             .config("spark.sql.warehouse.dir", "/user/hive/warehouse")
             .config("hive.metastore.warehouse.dir","/user/hive/warehouse")
@@ -26,10 +25,9 @@ object Task {
             .getOrCreate()
 
         Statistics.summaryDay(spark,args(0))
-
-
-
-
+        Statistics.summaryCalculateDay(spark,args(0),3)
+        Statistics.summaryCalculateDay(spark,args(0),7)
+        Statistics.summaryCalculateDay(spark,args(0),14)
         spark.stop
 
 

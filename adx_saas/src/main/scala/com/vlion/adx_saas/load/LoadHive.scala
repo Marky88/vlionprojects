@@ -62,7 +62,7 @@ object LoadHive {
                |from
                |    ods.adx_saas_dsp_req
                |where etl_date='${etlDate}' and etl_hour = '$etlHour'
-               |group by request_id,dsp_id
+               |group by t1.request_id,t2.dsp_id
                |
                |""".stripMargin).createOrReplaceTempView("dspReq")
 
@@ -143,8 +143,8 @@ object LoadHive {
                |    null as dsp_win_price,
                |    1 as imp, -- 每个曝光1条
                |    null as clk,
-               |    null as revenue,
-               |    null as cost,
+               |    max(dsp_final_price) as revenue, -- 只有1个,成交价----------------
+               |    max(ssp_final_price) as cost, -- 只有1个
                |    null as dsp_req_timeout,
                |    null as dsp_req_parse_error,
                |    null as dsp_req_invalid_ad,
@@ -214,8 +214,10 @@ object LoadHive {
                |    null as dsp_win_price,
                |    null as imp,
                |    null as clk,
-               |    max(dsp_final_price) as revenue, -- 只有1个,成交价----------------
-               |    max(ssp_final_price) as cost, -- 只有1个
+               |    null as revenue,
+               |    null as cost,
+               |    -- max(dsp_final_price) as revenue, -- 只有1个,成交价----------------
+               |    -- max(ssp_final_price) as cost, -- 只有1个
                |    null as dsp_req_timeout,
                |    null as dsp_req_parse_error,
                |    null as dsp_req_invalid_ad,
