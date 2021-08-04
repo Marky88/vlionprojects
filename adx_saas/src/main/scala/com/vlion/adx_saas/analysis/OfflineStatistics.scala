@@ -5,7 +5,7 @@ import java.text.SimpleDateFormat
 import java.util.{Date, TimeZone}
 
 import com.vlion.adx_saas.jdbc.MySQL
-import org.apache.spark.sql.SparkSession
+import org.apache.spark.sql.{DataFrame, SparkSession}
 
 /**
  * @description:
@@ -49,16 +49,94 @@ object OfflineStatistics {
     }
 
     def hourSummary(implicit spark: SparkSession, etlDate: String, etlHour: String): Unit = {
+
         //        val sdfDay = new SimpleDateFormat("yyyy-MM-dd")
         //        val dayTimestamp = sdfDay.parse(s"$etlDate").getTime / 1000 -57600 // 转换成utc时间的天
 
         // 当前小时的时间戳
-        val dayHourTimestamp = new SimpleDateFormat("yyyy-MM-dd HH").parse(s"$etlDate $etlHour").getTime / 1000
+        //        val dayHourTimestamp = new SimpleDateFormat("yyyy-MM-dd HH").parse(s"$etlDate $etlHour").getTime / 1000
+        //
+        //        val sdfDay = new SimpleDateFormat("yyyy-MM-dd")
+        //        sdfDay.setTimeZone(TimeZone.getTimeZone("UTC")); // 使用UTC的天,小时的时间戳按照当前的就行了,反正是时间戳
+        //        val dayTimestamp = sdfDay.parse(sdfDay.format(new Date(dayHourTimestamp * 1000))).getTime/1000
+        import org.apache.spark.sql.functions.lit
+        val resDF = spark table "media_req" union (spark.table("uniontable")).where(
+            """target_id is not null and
+              |target_id != '' and
+              |time is not null and
+              |dsp_id is not null and
+              |dsp_id != '' and
+              |pkg_id is not null and media_id is not null""".stripMargin)
+            .withColumn("update_time", lit(s"${etlDate} ${etlHour}:00:00"))
+            .withColumn("del", lit("no"))
 
-        val sdfDay = new SimpleDateFormat("yyyy-MM-dd")
-        sdfDay.setTimeZone(TimeZone.getTimeZone("UTC")); // 使用UTC的天,小时的时间戳按照当前的就行了,反正是时间戳
-        val dayTimestamp = sdfDay.parse(sdfDay.format(new Date(dayHourTimestamp * 1000))).getTime/1000
+        resDF
+            .coalesce(5)
+            .write.mode("append")
+            .format("jdbc")
+            .option("url", MySQL.url)
+            .option("driver", MySQL.driver)
+            .option("user", MySQL.user)
+            .option("password", MySQL.password)
+            .option("dbtable", mysqlStateTableName)
+            .save()
 
+        //        val prop=new java.util.Properties()
+        //        prop.put("driver",MySQL.driver)
+        //        prop.put("user",MySQL.user)
+        //        prop.put("password",MySQL.password)
+        //        resDF
+        //            .coalesce(5)
+        //            .write
+        //            .jdbc(MySQL.url,mysqlStateTableName,prop)
+
+//        insertUpdateMysql(spark, resDF, 12, mysqlStateTableName)
+
+
+    }
+
+
+    private def insertUpdateMysql(spark: SparkSession, df: DataFrame, keyNum: Int, targetTable: String) = {
+        val allColsSeq = df.schema.map(sf => sf.name).toList
+        val broadcast = spark.sparkContext.broadcast(allColsSeq)
+
+        df.rdd.coalesce(4).foreachPartition(iter => {
+            val list = iter.toList
+            //            println("list.size: "+list.size)
+
+            val allColsSeq = broadcast.value
+            val allCols = allColsSeq.mkString(",")
+            val updateCols = allColsSeq.slice(keyNum, allColsSeq.size).map(col => s"${col}=values(${col})").mkString(",")
+
+            Class.forName(MySQL.driver)
+            val conn = DriverManager.getConnection(MySQL.url, MySQL.user, MySQL.password)
+
+            val `num?` = allColsSeq.indices.map(_ => "?").mkString(",")
+
+            val pstmt = conn.prepareStatement(s"insert into $targetTable (${allCols}) values(${`num?`}) ON DUPLICATE key update ${updateCols}")
+            //            println(s"insert into $targetTable (${allCols}) values(${`num?`}) ON DUPLICATE key update ${updateCols}")
+            val colTuple = allColsSeq.zipWithIndex.map(t => (t._1, t._2 + 1))
+            //            println("colTuple: "+colTuple)
+
+            list.map(row => {
+                //                println("=" * 10)
+                //                println(row)
+                //                println("=" * 10)
+
+                colTuple.foreach { case (colName, pstmtIndex) =>
+                    // println(pstmtIndex,row.getAs[String](colName))
+                    // 插入每条数据
+                    pstmt.setObject(pstmtIndex, row.getAs[String](colName))
+                }
+                pstmt.execute()
+            })
+            pstmt.close()
+            conn.close()
+        })
+    }
+
+
+    def hourSummaryTest(spark: SparkSession, dayTimestamp: String, dayHourTimestamp: String, etlDate: String): Unit = {
         val resDF = spark.sql(
             s"""
                |(
@@ -185,13 +263,11 @@ object OfflineStatistics {
             .coalesce(5)
             .write.mode("append")
             .format("jdbc")
-            .option("url",MySQL.url)
-            .option("driver",MySQL.driver)
-            .option("user",MySQL.user)
-            .option("password",MySQL.password)
-            .option("dbtable",mysqlStateTableName)
+            .option("url", MySQL.url)
+            .option("driver", MySQL.driver)
+            .option("user", MySQL.user)
+            .option("password", MySQL.password)
+            .option("dbtable", mysqlStateTableName)
             .save()
-
     }
-
 }

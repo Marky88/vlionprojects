@@ -25,9 +25,9 @@ object Task {
             .getOrCreate()
 
         Statistics.summaryDay(spark,args(0))
-        Statistics.summaryCalculateDay(spark,args(0),3)
-        Statistics.summaryCalculateDay(spark,args(0),7)
-        Statistics.summaryCalculateDay(spark,args(0),14)
+//        Statistics.summaryCalculateDay(spark,args(0),3)
+//        Statistics.summaryCalculateDay(spark,args(0),7)
+//        Statistics.summaryCalculateDay(spark,args(0),14)
         spark.stop
 
 
