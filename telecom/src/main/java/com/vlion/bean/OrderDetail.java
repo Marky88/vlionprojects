@@ -15,7 +15,7 @@ public class OrderDetail implements Serializable {
     private String orderId; // 订单id
     private String orderStatus; // 订单状态
     private String otherStatus; // 激活状态
-    private String activeTime; // 激活时间
+    private String activeTime; // 激活时间  //
     private String sendNo; // 物流单号
     private String logisticsName; // 物流公司
     private String logisticsStatus; // 物流状态
@@ -26,5 +26,8 @@ public class OrderDetail implements Serializable {
     private String investTime; // 激活前充值时间
     private String etype ; // 头条转化类型
     private String signTime; //签收时间
+    private String statusUpdateTime; // 状态变更时间  //
+    private String carrier; // 运营商   //
+
 }
 

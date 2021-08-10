@@ -78,7 +78,7 @@ public class RealTimeTask {
                 if (value != null) {
                     String[] arr = value.split("\t", -1);
 //                    System.out.println("长度:"+ arr.length);
-                    if (arr[0].equals("316") && arr.length >= 25 && !arr[3].equals("")) { // 下单用户 consumer ,一定要有orderId
+                    if (arr[0].equals("316") && arr.length >= 34 && !arr[3].equals("")) { // 下单用户 consumer ,一定要有orderId
                         String orderId = arr[3];
                         String templateId = arr[4];
                         String cartNo = arr[5];
@@ -101,7 +101,7 @@ public class RealTimeTask {
                         String pid = arr[22]; //一级代理
                         String eid = arr[23]; //一级代理
                         String ip = arr[24]; //用户ip
-
+                        String carrier = arr[33]; // 运营商
                         // 获取
 //                        SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd hh:mm:ss");
 //                        Date date = sdf.parse(sdf.format(time * 1000));
@@ -133,9 +133,10 @@ public class RealTimeTask {
                         if(pid != null && !pid.trim().equals("")) consumer.setPid(pid);
                         if(eid != null && !eid.trim().equals("")) consumer.setEid(eid);
                         if(ip !=null && !ip.trim().equals("")) consumer.setIp(ip);
+                        if(carrier != null && !carrier.trim().equals("")) consumer.setCarrier(carrier);
 
                         return Tuple2.of(arr[0], consumer);
-                    } else if (arr[0].equals("317") && arr.length >= 14 && !arr[2].equals("")) { // 订单详情  order_details
+                    } else if (arr[0].equals("317") && arr.length >= 19 && !arr[2].equals("")) { // 订单详情  order_details
                         //订单详情表，新增了这3个字段：
                         //当other_status=“AC002”，取日志里面的时间戳字段更新active_time；
                         //当is_last_invest=“1”，取日志里面的时间戳字段更新last_invest_time；
@@ -147,8 +148,14 @@ public class RealTimeTask {
                         String orderStatus = arr[3];
                         String otherStatus = arr[4];
                         String activeTime = null;
+                        String carrier = arr[18]; // 运营商
+
                         if (otherStatus.equals("AC002")) {
                             activeTime = time;
+                        }
+
+                        if(carrier.equals("1")){
+                            activeTime = arr[17];
                         }
 
                         String sendNo = arr[5]; // 物流单号
@@ -169,6 +176,8 @@ public class RealTimeTask {
                             investTime = time;
                         }
                         String etype = arr[12]; // 头条转化类型
+                        String statusUpdateTime = arr[16];
+
                         OrderDetail orderDetail = new OrderDetail();
                         if (orderId != null && !"".equals(orderId.trim())) orderDetail.setOrderId(orderId);
                         if (orderStatus != null && !"".equals(orderStatus.trim()))
@@ -194,6 +203,8 @@ public class RealTimeTask {
                         if(logisticsStatus != null && logisticsName.equals("10")){ // 20210714新加
                             orderDetail.setSignTime(time);
                         }
+                        if(statusUpdateTime != null && !statusUpdateTime.equals("")) orderDetail.setStatusUpdateTime(statusUpdateTime);
+                        if(!carrier.equals("")) orderDetail.setCarrier(carrier);
                         return Tuple2.of("317", orderDetail);
                     } else {
                         return null;

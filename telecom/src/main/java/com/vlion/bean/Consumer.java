@@ -36,4 +36,5 @@ public class Consumer implements Serializable {
     private String pid; //一级代理
     private String eid; //二级代理
     private String ip; // 用户ip
+    private String carrier; // 运营商
 }

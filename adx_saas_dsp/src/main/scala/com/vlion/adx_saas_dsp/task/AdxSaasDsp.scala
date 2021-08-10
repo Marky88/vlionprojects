@@ -37,6 +37,9 @@ object AdxSaasDsp {
         OfflineStatistics.preprocessTable(spark,etlDate,etlHour)
 
         OfflineStatistics.conversionDaySummary(spark,etlDate)
-//        OfflineStatistics.deviceConversionDay(spark,etlDate)
+        OfflineStatistics.deviceConversionDay(spark,etlDate)
+        OfflineStatistics.bundleConversionDay(spark,etlDate)
+        OfflineStatistics.dspBidFloorCntHour(spark,etlDate,etlHour)
+        OfflineStatistics.adDimensionPreSummary(spark,etlDate,etlHour) // 1.4广告全量数据预聚合
     }
 }

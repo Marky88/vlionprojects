@@ -29,6 +29,7 @@ object OfflineStatistics {
     val dspChannelQuality = "dsp_channel_quality" //1.2.4 按小时统计下游流量数据
     val dspConversionInfo = "dsp_conversion_info"
     val dspDeviceBidCnt = "dsp_device_bid_cnt" // 1.3.1 按天汇总设备转化数据
+    val dspBundleBidCnt = "dsp_bundle_bid_cnt" // 1.3.2
 
     /**
      * 将表预处理,得到一个视图
@@ -66,7 +67,12 @@ object OfflineStatistics {
                |   downstream_id ,
                |   conversion_task_id,
                |    conversion_unit_price,
-               |    stuff_id
+               |    stuff_id,
+               |     stuff_shape,
+               |    adsolt_shape,
+               |    pkg_name,
+               |    country_code,
+               |    os
                |from
                |(
                |    select
@@ -75,8 +81,6 @@ object OfflineStatistics {
                |    from
                |        ods.ods_dsp_info
                |        where etl_date='${etlDate}' and etl_hour='${etlHour}'
-               |        and admaster_id is not null and admaster_id != '' -- 广告主id不为空
-               |         and plan_id is not null and plan_id != ''  -- 计划id不为空
                |) t
                |where r_n =1
                |
@@ -112,7 +116,11 @@ object OfflineStatistics {
                |   downstream_id    ,
                |    conversion_task_id,
                |    conversion_unit_price,
-               |    stuff_id
+               |    stuff_id,
+               |    stuff_shape,
+               |    adsolt_shape,
+               |    pkg_name,
+               |    country_code
                |from
                |(
                |    select
@@ -161,7 +169,8 @@ object OfflineStatistics {
                |        row_number() over(partition by logtype,admaster_id,plan_id order by `time` desc) as r_n -- 每种日志分区,取最大的
                |    from
                |    preprocess_table1
-               |    where logtype !='10'
+               |    where logtype !='10' and admaster_id is not null and admaster_id != '' -- 广告主id不为空
+               |         and plan_id is not null and plan_id != ''  -- 计划id不为空
                |) t
                |group by
                |    admaster_id,plan_id
@@ -282,15 +291,7 @@ object OfflineStatistics {
                |    (sum(if(logtype='14',win_price,null)) / 1000 ) / count(if(logtype='15',logtype,null)) as clk_cost, -- 点击成本
                |    '0' as process_status
                |from
-               |   ( -- 先去个重,去时间小的一条
-               |    select
-               |        *,
-               |        row_number() over(partition by logtype,trace_id,request_id,adsolt_id order by `time` asc) as r_n -- 取重复的最早出现的一次
-               |    from
-               |        ods.ods_dsp_info
-               |        where etl_date='${etlDate}' and etl_hour='${etlHour}'
-               |  ) t
-               |  where r_n = 1
+               |   preprocess_table1 t
                |   group by
                |    downstream_id, -- 下游id
                |    adsolt_type -- 广告位id
@@ -356,19 +357,19 @@ object OfflineStatistics {
     }
 
     /**
-     * 1.3.1 按天汇总设备转化数据,数据量比较大,先搁着....
+     * 1.3.1 按天汇总设备转化数据
      * @param spark
      * @param etlDate
      */
     def deviceConversionDay(spark:SparkSession,etlDate:String)={
-        val dfConversionDay = spark.sql(
+        spark.sql(
             s"""
-               |
                |select
                |    '${etlDate}' as date,
                |    device_id,
                |    downstream_id  as channel_id,
                |    plan_id,
+               |    conversion_task_id as conv_task,
                |    avg(if(logtype='11',floor_price,null)) as floor_avg,
                |    count(if(logtype='12',1,null)) as fill_req,
                |    avg(if(logtype='11',plan_price,null)) as bid_price_avg,
@@ -384,9 +385,262 @@ object OfflineStatistics {
                |group by
                |    device_id,
                |    downstream_id,
-               |    plan_id
+               |    plan_id,
+               |    conversion_task_id
+               |""".stripMargin).persist(StorageLevel.MEMORY_AND_DISK).createOrReplaceTempView("device_conversion_view")
+
+//        insertUpdateMysql(spark,dfConversionDay,4, dspDeviceBidCnt)
+        val deviceConversionDF = spark.sql(
+            s"""
+               |(
+               |select
+               |    *,1 as summary_type
+               |from
+               |    device_conversion_view
+               |where
+               |    conversion > 0
+               |)
+               |
+               |union all
+               |
+               |(
+               |select
+               |    *,2 as summary_type
+               |from
+               |    device_conversion_view
+               |where
+               |    imp >= 100 and ctr <= 0.0005
+               |    order by imp desc,ctr asc limit 100  -- 还有排序,用同一个表查询会比较复杂
+               |)
+               |
+               |union all
+               |
+               |(
+               |select
+               |    *,3 as summary_type
+               |from
+               |    device_conversion_view
+               |where
+               |    ssp_win >= 100 and (imp / ssp_win) * 100 < 0.1
+               |order by ssp_win desc,(imp / ssp_win) * 100 asc limit 100  -- 还有排序,用同一个表查询会比较复杂
+               |)
                |""".stripMargin)
-        insertUpdateMysql(spark,dfConversionDay,4, dspDeviceBidCnt)
+
+
+        insertUpdateMysql(spark,deviceConversionDF,5, dspDeviceBidCnt)
+
+
+    }
+
+    /**
+     * 1.3.2 按天汇总包名转化数据
+     * 需按 "日志类型+追踪ID+竞价请求ID+广告位ID" 去重
+     *
+     * 汇总结果：
+     *
+     * 优质包名指标：
+     * Imp > 100 and CTR > 2%，Top 100
+     * IVT 包名指标：
+     * Imp > 1000 and CTR < 0.05%，Top 100
+     *
+     * @param spark
+     * @param etlDate
+     */
+    def bundleConversionDay(spark:SparkSession, etlDate:String): Unit ={
+        spark.sql(
+            s"""
+               |select
+               |    '${etlDate}' as date,
+               |    pkg_name as bundle,
+               |    downstream_id  as channel_id,
+               |    plan_id,
+               |    conversion_task_id as conv_task,
+               |    avg(if(logtype='11',floor_price,null)) as floor_avg,
+               |    count(if(logtype='12',1,null)) as fill_req,
+               |    avg(if(logtype='11',plan_price,null)) as bid_price_avg,
+               |    count(if(logtype='13',1,null)) as ssp_win,
+               |    count(if(logtype='14',1,null)) as imp,
+               |    avg(if(logtype='14',win_price,null)) as clear_price_avg,
+               |    count(if(logtype='15',1,null)) as clk,
+               |    count(if(logtype='15',1,null)) / count(if(logtype='14',1,null)) as ctr,
+               |    count(if(logtype='17',1,null)) as conversion,
+               |    count(if(logtype='17',1,null)) / count(if(logtype='15',1,null)) as cvr
+               |from
+               | preprocess_table_day
+               |group by
+               |    pkg_name,
+               |    downstream_id,
+               |    plan_id,
+               |    conversion_task_id
+               |""".stripMargin).persist(StorageLevel.MEMORY_AND_DISK).createOrReplaceTempView("device_info_view")
+
+        val dspBundleBidCntDF = spark.sql(
+            s"""
+               |(
+               |select
+               |    *,1 as summary_type
+               |from
+               |    device_info_view
+               |where imp >= 100 and ctr >= 0.02
+               |order by imp desc ,ctr desc
+               |limit 100
+               |)
+               |
+               |union all
+               |(
+               |select
+               |    *,2 as summary_type
+               |from
+               |    device_info_view
+               |where imp >= 100 and ctr <= 0.0005
+               |order by imp desc, ctr asc
+               |limit 100
+               |)
+               |
+               |union all
+               |(
+               |select
+               |    *,3 as summary_type
+               |from
+               |    device_info_view
+               |where ssp_win >= 100 and (imp / ssp_win) * 100 < 0.1
+               |order by ssp_win desc,(imp / ssp_win) * 100 asc limit 100
+               |)
+               |
+               |""".stripMargin)
+        insertUpdateMysql(spark,dspBundleBidCntDF,5, dspBundleBidCnt)
+
+    }
+
+    /**
+     * 1.3.3 按小时统计底价范围数据
+     * 表名：dsp_bidfloor_cnt
+     *
+     * 需按 "日志类型+追踪ID+竞价请求ID+广告位ID" 去重
+     *
+     * 汇总"包名+广告位尺寸"维度总请求数大于1000的记录
+     */
+    def dspBidFloorCntHour(spark:SparkSession, etlDate:String,etlHour:String): Unit ={
+        val rangeList = Range(15,51,5)
+        val rangeList1 = Range(10,46,5)
+        // 左开右闭
+
+        val partSql = rangeList1.zip(rangeList).map { case (leftIndex, rightIndex) =>
+            s"""
+               |count(if(logtype='10' and floor_price > $leftIndex and floor_price <= $rightIndex,1,null)) as req_less_$rightIndex,
+               |    count(if(logtype='12' and floor_price > $leftIndex and floor_price <= $rightIndex ,1,null)) as fill_less_$rightIndex,
+               |    count(if(logtype='13' and floor_price > $leftIndex and floor_price <= $rightIndex ,1,null)) as win_less_$rightIndex
+               |""".stripMargin
+        }.mkString(",")
+
+
+
+
+
+        val frame = spark.sql(
+            s"""
+               |select
+               |    data_hour,
+               |    bundle,
+               |    ad_size,
+               |    req_less_10,
+               |    fill_less_10,
+               |    win_less_10,
+               |    ${rangeList.map(index => s"req_less_${index}, fill_less_$index, win_less_$index").mkString(",")},
+               |    req_great_50,
+               |    fill_great_50,
+               |    win_great_50
+               |from
+               |(
+               |    select
+               |        '${etlDate} $etlHour:00:00' as data_hour,
+               |        pkg_name as bundle,
+               |        adsolt_shape as ad_size,
+               |        count(if(logtype='10' and floor_price <= 10,1,null)) as req_less_10,
+               |        count(if(logtype='12' and floor_price <=10 ,1,null)) as fill_less_10,
+               |        count(if(logtype='13' and floor_price <=10 ,1,null)) as win_less_10,
+               |       ${partSql},
+               |       count(if(logtype='10' and floor_price > 50,1,null)) as req_great_50,
+               |        count(if(logtype='12' and floor_price > 50 ,1,null)) as fill_great_50,
+               |        count(if(logtype='13' and floor_price > 50 ,1,null)) as win_great_50,
+               |        sum(if(logtype='10',1,0)) as log10_cnt
+               |    from
+               |    preprocess_table1
+               |    group by
+               |        pkg_name,adsolt_shape
+               |) t
+               |where log10_cnt > 1000
+               |""".stripMargin)
+
+        insertUpdateMysql(spark,frame,2,"dsp_bidfloor_cnt")
+
+
+    }
+
+    /**
+     * 1.4 广告全量数据预聚合
+     * 按 "日志类型+追踪ID+竞价请求ID+广告位ID" 去重
+     *
+     * 预聚合数据写入大数据支持各维度聚合实时查询
+     *
+     * @param spark
+     * @param etlDate
+     * @param etlHour
+     */
+    def adDimensionPreSummary(spark:SparkSession,etlDate:String,etlHour:String)={
+        spark.sql(
+            s"""
+               |select
+               |    '$etlDate' as date,
+               |    '$etlHour' as hour,
+               |    downstream_id,
+               |    country_code,
+               |    adsolt_type,
+               |    adsolt_shape,
+               |    os,
+               |    pkg_name,
+               |    admaster_id,
+               |    plan_id,
+               |    creative_id,
+               |    stuff_id,
+               |    stuff_shape,
+               |    conversion_task_id,
+               |    count(if(logtype='10',1,null)) as total_req,
+               |    sum(if(logtype='10',floor_price,null)) as bid_floor_sum,
+               |    count(if(logtype='11',1,null)) as offer_bid,
+               |    sum(if(logtype='11',plan_price,null)) as offer_price,
+               |    count(if(logtype='12',1,null)) as fill_req,
+               |    sum(if(logtype='12',plan_price,null)) as bid_price,
+               |    count(if(logtype='13',1,null)) as ssp_win,
+               |    count(if(logtype='16',1,null)) as ssp_loss,
+               |    count(if(logtype='14',1,null)) as imp,
+               |    sum(if(logtype='14',win_price,null)) as clear_price,
+               |    count(if(logtype='15',1,null)) as clk,
+               |    count(if(logtype='17',1,null)) as conversion,
+               |    sum(if(logtype='14',win_price,null)) as cost,
+               |    sum(if(logtype='17',conversion_unit_price,null)) as revenue
+               |from
+               |    preprocess_table1
+               |group by
+               |    downstream_id,
+               |    country_code,
+               |    adsolt_type,
+               |    adsolt_shape,
+               |    os,
+               |    pkg_name,
+               |    admaster_id,
+               |    plan_id,
+               |    creative_id,
+               |    stuff_id,
+               |    stuff_shape,
+               |    conversion_task_id
+               |
+               |""".stripMargin)
+            .coalesce(1)
+            .write
+            .mode("overwrite")
+            .partitionBy("date","hour")
+            .saveAsTable("dm.dsp_detail_data_count")
 
     }
 

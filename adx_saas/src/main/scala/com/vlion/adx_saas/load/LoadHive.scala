@@ -15,7 +15,7 @@ object LoadHive {
         spark.sql(
             s"""
                |select
-               |    floor((floor(t1.req_time / 3600) * 3600) / 86400) as time,
+               |    floor((floor(t1.req_time / 3600) * 3600) / 86400) * 86400 as time,
                |    floor(t1.req_time / 3600) * 3600 as hour,
                |    '${etlDate}' as time_format,
                |    -2 as dsp_id,
@@ -114,7 +114,7 @@ object LoadHive {
                |        max(app_id) as mlevel, -- 对应mlevel_id
                |        1 as dsp_req, -- 多个
                |        count(if(staus_code='1',1,null)) as dsp_fill_req,
-               |        sum(if(dsp_bid_price is null or trim(dsp_bid_price)='',null,dsp_bid_price)) as dsp_floor, -- 有多个
+               |        sum(if( staus_code = '1',dsp_bid_price, null )) as dsp_floor, -- 有多个
                |        count(if(staus_code='201',1,null)) as dsp_req_timeout, -- 不去重
                |        count(if(staus_code='202',1,null)) as dsp_req_parse_error, -- 不去重
                |        count(if(staus_code='203',1,null)) as dsp_req_invalid_ad,

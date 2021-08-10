@@ -60,17 +60,43 @@ object OfflineStatistics {
         //        sdfDay.setTimeZone(TimeZone.getTimeZone("UTC")); // 使用UTC的天,小时的时间戳按照当前的就行了,反正是时间戳
         //        val dayTimestamp = sdfDay.parse(sdfDay.format(new Date(dayHourTimestamp * 1000))).getTime/1000
         import org.apache.spark.sql.functions.lit
-        val resDF = spark table "media_req" union (spark.table("uniontable")).where(
+        val resDF = (spark table "media_req" union (spark.table("uniontable")).where(
             """target_id is not null and
               |target_id != '' and
               |time is not null and
               |dsp_id is not null and
               |dsp_id != '' and
               |pkg_id is not null and media_id is not null""".stripMargin)
+            )
             .withColumn("update_time", lit(s"${etlDate} ${etlHour}:00:00"))
             .withColumn("del", lit("no"))
+                .createOrReplaceTempView("resDF")
 
-        resDF
+        spark.sql(
+            s"""
+               |select
+               |    time,hour,time_format,dsp_id,target_id,media_id,posid_id,pkg_id,country_id,platform_id,style_id,mlevel_id,del,update_time,
+               |    max(ssp_req) as ssp_req,
+               |    max(dsp_req) as dsp_req,
+               |    max(dsp_fill_req) as dsp_fill_req,
+               |    max(dsp_win) as dsp_win,
+               |    max(ssp_win) as ssp_win,
+               |    max(dsp_floor) as dsp_floor,
+               |    max(ssp_floor) as ssp_floor,
+               |    max(dsp_win_price) as dsp_win_price,
+               |    max(imp) as imp,
+               |    max(clk) as clk,
+               |    max(revenue) as revenue,
+               |    max(cost) as cost,
+               |    max(dsp_req_timeout) as dsp_req_timeout,
+               |    max(dsp_req_parse_error) as dsp_req_parse_error,
+               |    max(dsp_req_invalid_ad) as dsp_req_invalid_ad,
+               |    max(dsp_req_no_bid) as dsp_req_no_bid
+               |from
+               |    resDF
+               |group by
+               |    time,hour,time_format,dsp_id,target_id,media_id,posid_id,pkg_id,country_id,platform_id,style_id,mlevel_id,del,update_time
+               |""".stripMargin)
             .coalesce(5)
             .write.mode("append")
             .format("jdbc")
