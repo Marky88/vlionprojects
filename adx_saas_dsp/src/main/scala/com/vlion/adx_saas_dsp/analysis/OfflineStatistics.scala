@@ -590,21 +590,20 @@ object OfflineStatistics {
     def adDimensionPreSummary(spark:SparkSession,etlDate:String,etlHour:String)={
         spark.sql(
             s"""
+               |insert overwrite table dm.dsp_detail_data_count partition(date='$etlDate',hour='$etlHour')
                |select
-               |    '$etlDate' as date,
-               |    '$etlHour' as hour,
-               |    downstream_id,
-               |    country_code,
-               |    adsolt_type,
-               |    adsolt_shape,
+               |    downstream_id as channel_id,
+               |    country_code as country,
+               |    adsolt_type as ad_type,
+               |    adsolt_shape as ad_size,
                |    os,
-               |    pkg_name,
-               |    admaster_id,
-               |    plan_id,
-               |    creative_id,
+               |    pkg_name as bundle,
+               |    admaster_id as adv_id,
+               |    plan_id as plan_id,
+               |    creative_id as creative_id,
                |    stuff_id,
-               |    stuff_shape,
-               |    conversion_task_id,
+               |    stuff_shape as stuff_size,
+               |    conversion_task_id as conversion_task,
                |    count(if(logtype='10',1,null)) as total_req,
                |    sum(if(logtype='10',floor_price,null)) as bid_floor_sum,
                |    count(if(logtype='11',1,null)) as offer_bid,
@@ -636,11 +635,6 @@ object OfflineStatistics {
                |    conversion_task_id
                |
                |""".stripMargin)
-            .coalesce(1)
-            .write
-            .mode("overwrite")
-            .partitionBy("date","hour")
-            .saveAsTable("dm.dsp_detail_data_count")
 
     }
 

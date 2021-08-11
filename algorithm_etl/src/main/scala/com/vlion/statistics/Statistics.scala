@@ -15,16 +15,98 @@ import org.apache.spark.sql.SparkSession
  */
 object Statistics {
 
+    val appIds = Array("30858","31433","30804")
+
     def summaryDay(spark: SparkSession, etlDate: String): Unit = {
-
-    }
-
-    def summaryDayWithMedia(spark: SparkSession, etlDate: String): Unit = {
         spark.udf.register("max_count_col", new MaxCountColUDAF)
         spark.udf.register("time_process", new TimeUDAF(etlDate))
         spark.udf.register("parse_brand", new ParseBrandUDF().parseBrand _ )
 
-        val appIds = Array("30858","31433","30804").map(x => "'"+x+"'").mkString(",")
+        summaryDayWithMedia(spark,etlDate,appIds)
+        summaryDayNoMedia(spark,etlDate,appIds)
+
+        val targetTable ="behavior.behavior_summary_day_2"
+
+        spark.sql(
+            s"""
+               |insert overwrite table $targetTable partition(etl_date = '${etlDate}')
+               |select
+               |    t1.app_id,
+               |    t1.id,
+               |    t1.adsolt_id,
+               |    t1.id_type,
+               |    t1.os,
+               |    t1.producer,
+               |    t1.model,
+               |    t1.osv,
+               |    t1.brand,
+               |    t1.adsolt_width,
+               |    t1.adsolt_height,
+               |    t1.carrier,
+               |    t1.network,
+               |    t1.city_id,
+               |    t1.pkg_name,
+               |    t1.adsolt_type,
+               |    t1.real_adsolt_width,
+               |    t1.real_adsolt_height,
+               |    t1.req_count,
+               |    t1.req_rate, -- 竞价请求次数占比
+               |    t1.req_avg_real_price, -- 竞价请求平均价格
+               |    t1.req_max_real_price, -- 竞价请求最高价格
+               |    t1.req_min_real_price,
+               |    t1.imp_cnt , -- 曝光次数
+               |    t1.imp_rate, -- 曝光次数占比
+               |    t1.imp_creative_count, -- 曝光创意种类次数
+               |    t1.imp_max_count_creative,  -- 曝光最多的创意
+               |    t1.imp_avg_real_price, -- 曝光平均价格
+               |    t1.imp_max_real_price,
+               |    t1.imp_min_real_price, -- 曝光最低价格
+               |    t1.clk_cnt,
+               |    t1.clk_rate,
+               |    t1.clk_creative_count, -- 点击创意种类次数
+               |    t1.clk_max_count_creative,  -- 点击最多的创意
+               |    t1.clk_first_seconds,
+               |    t1.clk_last_seconds,
+               |    t1.clk_min_interval,
+               |    t1.clk_max_interval,
+               |    t1.clk_avg_interval,
+               |    t2.req_count as req_count_2,
+               |    t2.req_rate as req_rate_2, -- 竞价请求次数占比
+               |    t2.req_avg_real_price as req_avg_real_price_2, -- 竞价请求平均价格
+               |    t2.req_max_real_price as req_max_real_price_2, -- 竞价请求最高价格
+               |    t2.req_min_real_price as req_min_real_price_2,
+               |    t2.req_app_count as req_app_count_2,
+               |    t2.imp_cnt as imp_cnt_2, -- 曝光次数
+               |    t2.imp_rate as imp_rate_2, -- 曝光次数占比
+               |    t2.imp_creative_count as imp_creative_count_2, -- 曝光创意种类次数
+               |    t2.imp_max_count_creative as imp_max_count_creative_2,  -- 曝光最多的创意
+               |    t2.imp_avg_real_price as imp_avg_real_price_2, -- 曝光平均价格
+               |    t2.imp_max_real_price as imp_max_real_price_2,
+               |    t2.imp_min_real_price as imp_min_real_price_2, -- 曝光最低价格
+               |    t2.imp_app_count as imp_app_count_2,
+               |    t2.clk_cnt as clk_cnt_2,
+               |    t2.clk_rate as clk_rate_2,
+               |    t2.clk_creative_count as clk_creative_count_2, -- 点击创意种类次数
+               |    t2.clk_max_count_creative as clk_max_count_creative_2,  -- 点击最多的创意
+               |    t2.clk_first_seconds as clk_first_seconds_2,
+               |    t2.clk_last_seconds as clk_last_seconds_2,
+               |    t2.clk_min_interval as clk_min_interval_2,
+               |    t2.clk_max_interval as clk_max_interval_2,
+               |    t2.clk_avg_interval as clk_avg_interval_2,
+               |    t2.clk_app_count as clk_app_count_2
+               |from
+               |    behavior_day_with_media t1
+               |left join
+               |    behavior_day_no_media t2
+               |on t1.id = t2.id
+               |""".stripMargin)
+
+    }
+
+    private def summaryDayWithMedia(spark: SparkSession, etlDate: String,appIdArray:Array[String]): Unit = {
+
+
+        val appIdsStr = appIdArray.map(x => "'"+x+"'").mkString(",")
 
         spark.sql("set hive.exec.dynamic.partition.mode=nonstrict")
         spark.sql("set hive.exec.dynamic.partition =true")
@@ -32,7 +114,6 @@ object Statistics {
         // 分媒体,广告位id
         spark.sql(
             s"""
-               |insert overwrite table behavior.behavior_summary_day partition(etl_date)
                |
                |select
                |    t1.app_id,
@@ -161,7 +242,7 @@ object Statistics {
                |                1 as req_count, -- 竞价请求次数
                |                floor_price -- 竞价请求价格
                |            from
-               |            ods.ods_media_req where etl_date='${etlDate}' and time is not null and time!='' and app_id in (${appIds})
+               |            ods.ods_media_req where etl_date='${etlDate}' and time is not null and time!='' and app_id in (${appIdsStr})
                |        ) t
                |        group by app_id,id,adsolt_id
                |    ) t
@@ -210,7 +291,7 @@ object Statistics {
                |                real_price -- 曝光价格
                |            from
                |                ods.ods_ssp_imp
-               |            where etl_date='${etlDate}' and time is not null and time!='' and app_id in (${appIds})
+               |            where etl_date='${etlDate}' and time is not null and time!='' and app_id in (${appIdsStr})
                |        ) t
                |        group by app_id,id,adsolt_id
                |    ) t
@@ -260,19 +341,20 @@ object Statistics {
                |                dsp_adsolt_id as creative_id, -- 创意id
                |                time -- 时间戳/ 秒
                |        from
-               |        ods.ods_ssp_clk where etl_date='${etlDate}' and time is not null and time!='' and app_id in (${appIds})
+               |        ods.ods_ssp_clk where etl_date='${etlDate}' and time is not null and time!='' and app_id in (${appIdsStr})
                |        ) t
                |        group by app_id,id,adsolt_id
                |    ) t
                |) t3
                |on t1.app_id = t3.app_id and t1.id= t3.id and t1.adsolt_id = t3.adsolt_id
                |
-               |""".stripMargin)
+               |""".stripMargin).createOrReplaceTempView("behavior_day_with_media")
 
 
     }
 
-    def summaryDayNoMedia(spark: SparkSession, etlDate: String): Unit = {
+    private def summaryDayNoMedia(spark: SparkSession, etlDate: String,appIdArray:Array[String]): Unit = {
+        val appIdsStr = appIdArray.map(x => "'"+x+"'").mkString(",")
         spark.sql(
             s"""
                |select
@@ -297,6 +379,7 @@ object Statistics {
                |    t1.avg_real_price as req_avg_real_price, -- 竞价请求平均价格
                |    t1.max_real_price as req_max_real_price, -- 竞价请求最高价格
                |    t1.min_real_price as req_min_real_price,
+               |    t1.req_app_count,  -- 请求媒体种类数量
                |    t2.imp_cnt , -- 曝光次数
                |    t2.imp_rate, -- 曝光次数占比
                |    t2.creative_count as imp_creative_count, -- 曝光创意种类次数
@@ -304,6 +387,7 @@ object Statistics {
                |    t2.avg_real_price as imp_avg_real_price, -- 曝光平均价格
                |    t2.max_real_price as imp_max_real_price,
                |    t2.min_real_price as imp_min_real_price, -- 曝光最低价格
+               |    t2.imp_app_count, -- 曝光媒体种类数量
                |    t3.clk_cnt,
                |    t3.clk_rate,
                |    t3.creative_count as clk_creative_count, -- 点击创意种类次数
@@ -313,6 +397,7 @@ object Statistics {
                |    t3.min_interval as clk_min_interval,
                |    t3.max_interval as clk_max_interval,
                |    t3.avg_interval as clk_avg_interval,
+               |    t3.clk_app_count, -- 点击媒体种类数量
                |    t1.etl_date
                |from
                |( -- 媒体请求
@@ -398,7 +483,7 @@ object Statistics {
                |                1 as req_count, -- 竞价请求次数
                |                floor_price -- 竞价请求价格
                |            from
-               |            ods.ods_media_req where etl_date='${etlDate}' and time is not null and time!=''
+               |            ods.ods_media_req where etl_date='${etlDate}' and time is not null and time!='' and app_id in (${appIdsStr})
                |        ) t
                |        group by id
                |    ) t
@@ -445,7 +530,7 @@ object Statistics {
                |                real_price -- 曝光价格
                |            from
                |                ods.ods_ssp_imp
-               |            where etl_date='${etlDate}' and time is not null and time!=''
+               |            where etl_date='${etlDate}' and time is not null and time!='' and app_id in (${appIdsStr})
                |        ) t
                |        group by id
                |    ) t
@@ -493,14 +578,15 @@ object Statistics {
                |                dsp_adsolt_id as creative_id, -- 创意id
                |                time -- 时间戳/ 秒
                |        from
-               |        ods.ods_ssp_clk where etl_date='${etlDate}' and time is not null and time!=''
+               |        ods.ods_ssp_clk where etl_date='${etlDate}' and time is not null and time!='' and app_id in (${appIdsStr})
                |        ) t
                |        group by id
                |    ) t where time_elements[0] != 0.0
                |) t3
                |on  t1.id= t3.id
                |
-               |""".stripMargin)
+               |""".stripMargin).createOrReplaceTempView("behavior_day_no_media")
+
     }
 
 
@@ -662,7 +748,7 @@ object Statistics {
      * @param spark
      * @param etlDate
      */
-    def summaryNoMediaDay(spark:SparkSession,etlDate:String): Unit ={
+    def summaryNoMediaDay(spark:SparkSession,etlDate:String,appIds:Array[String]): Unit ={
 
         spark.sql(
             s"""
@@ -791,7 +877,7 @@ object Statistics {
                |                1 as req_count, -- 竞价请求次数
                |                floor_price -- 竞价请求价格
                |            from
-               |            ods.ods_media_req where etl_date='${etlDate}' and time is not null and time!=''
+               |            ods.ods_media_req where etl_date='${etlDate}' and time is not null and time!='' and app_id in ()
                |        ) t
                |        group by id
                |    ) t

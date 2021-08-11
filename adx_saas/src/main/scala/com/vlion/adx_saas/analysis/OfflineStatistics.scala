@@ -27,7 +27,8 @@ object OfflineStatistics {
     def updateMysqlPkg(implicit spark: SparkSession, etlDate: String, etlHour: String): Unit = {
         spark.sql(
             s"""
-               |select distinct pkg_name from ods.adx_saas_media_req where pkg_name is not null and pkg_name!=''
+               |select distinct pkg_name from ods.adx_saas_media_req  where pkg_name is not null and pkg_name!=''
+               |and etl_date = '${etlDate}' and etl_hour = '$etlHour'
                |""".stripMargin)
             .rdd
             .repartition(2)
@@ -72,10 +73,23 @@ object OfflineStatistics {
             .withColumn("del", lit("no"))
                 .createOrReplaceTempView("resDF")
 
-        spark.sql(
-            s"""
+        spark.sql( // 有正则,比较麻烦,使用raw插值
+            raw"""
                |select
-               |    time,hour,time_format,dsp_id,target_id,media_id,posid_id,pkg_id,country_id,platform_id,style_id,mlevel_id,del,update_time,
+               |    time,
+               |    hour,
+               |    time_format,
+               |    dsp_id,
+               |    target_id,
+               |    media_id,
+               |    posid_id,
+               |    pkg_id,
+               |    country_id,
+               |    platform_id,
+               |    style_id,
+               |    mlevel_id,
+               |    del,
+               |    update_time,
                |    max(ssp_req) as ssp_req,
                |    max(dsp_req) as dsp_req,
                |    max(dsp_fill_req) as dsp_fill_req,
@@ -94,6 +108,14 @@ object OfflineStatistics {
                |    max(dsp_req_no_bid) as dsp_req_no_bid
                |from
                |    resDF
+               |    where posid_id  rlike '^[\\d-\\.]+$$'
+               |    and media_id rlike '^[\\d-\\.]+$$'
+               |    and dsp_id rlike '^[\\d-\\.]+$$'
+               |    and pkg_id rlike '^[\\d-\\.]+$$'
+               |    and country_id rlike '^[\\d-\\.]+$$'
+               |    and platform_id rlike '^[\\d-\\.]+$$'
+               |    and style_id rlike '^[\\d-\\.]+$$'
+               |    and mlevel_id rlike '^[\\d-\\.]+$$'
                |group by
                |    time,hour,time_format,dsp_id,target_id,media_id,posid_id,pkg_id,country_id,platform_id,style_id,mlevel_id,del,update_time
                |""".stripMargin)
