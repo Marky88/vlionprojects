@@ -37,4 +37,5 @@ public class Consumer implements Serializable {
     private String eid; //二级代理
     private String ip; // 用户ip
     private String carrier; // 运营商
+    private String gdtNoWXClkId; // 0-37的字段,第38列
 }
