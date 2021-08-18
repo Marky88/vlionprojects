@@ -6,6 +6,7 @@ import java.util.{Date, TimeZone}
 
 import com.vlion.adx_saas.jdbc.MySQL
 import org.apache.spark.sql.{DataFrame, SparkSession}
+import org.apache.spark.storage.StorageLevel
 
 /**
  * @description:
@@ -73,7 +74,7 @@ object OfflineStatistics {
             .withColumn("del", lit("no"))
                 .createOrReplaceTempView("resDF")
 
-        spark.sql( // 有正则,比较麻烦,使用raw插值
+        val resDF2 = spark.sql( // 有正则,比较麻烦,使用raw插值
             raw"""
                |select
                |    time,
@@ -120,6 +121,9 @@ object OfflineStatistics {
                |    time,hour,time_format,dsp_id,target_id,media_id,posid_id,pkg_id,country_id,platform_id,style_id,mlevel_id,del,update_time
                |""".stripMargin)
             .coalesce(5)
+            .persist(StorageLevel.MEMORY_AND_DISK)
+
+        resDF2
             .write.mode("append")
             .format("jdbc")
             .option("url", MySQL.url)
@@ -139,6 +143,47 @@ object OfflineStatistics {
         //            .jdbc(MySQL.url,mysqlStateTableName,prop)
 
 //        insertUpdateMysql(spark, resDF, 12, mysqlStateTableName)
+
+        // 导入到impala
+        resDF2.createOrReplaceTempView("resDF2")
+
+        // 导入到impala/hive表中
+        spark.sql(
+            s"""
+               |insert overwrite table dm.adx_saas_stat
+               |partition(etl_date='$etlDate',etl_hour='$etlHour')
+               |select
+               |time,
+               |hour,
+               |time_format,
+               |dsp_id,
+               |target_id,
+               |media_id,
+               |posid_id,
+               |pkg_id,
+               |country_id,
+               |platform_id,
+               |style_id,
+               |mlevel_id,
+               |ssp_req,
+               |dsp_req,
+               |dsp_fill_req,
+               |dsp_win,
+               |ssp_win,
+               |dsp_floor,
+               |ssp_floor,
+               |dsp_win_price,
+               |imp,
+               |clk,
+               |revenue,
+               |cost,
+               |dsp_req_timeout,
+               |dsp_req_parse_error,
+               |dsp_req_invalid_ad,
+               |dsp_req_no_bid,
+               |del
+               |from resDF2
+               |""".stripMargin)
 
 
     }
@@ -184,7 +229,7 @@ object OfflineStatistics {
     }
 
 
-    def hourSummaryTest(spark: SparkSession, dayTimestamp: String, dayHourTimestamp: String, etlDate: String): Unit = {
+    def hourSummaryTest(spark: SparkSession, dayTimestamp: String, dayHourTimestamp: String, etlDate: String,etlHour:String): Unit = {
         val resDF = spark.sql(
             s"""
                |(
@@ -304,7 +349,7 @@ object OfflineStatistics {
                |    if(mlevel_id   is null or mlevel_id    ='','-1',mlevel_id    )
                |)
                |""".stripMargin)
-
+        resDF.persist(StorageLevel.MEMORY_AND_DISK)
 
         resDF.show(false)
         resDF
@@ -317,5 +362,6 @@ object OfflineStatistics {
             .option("password", MySQL.password)
             .option("dbtable", mysqlStateTableName)
             .save()
+
     }
 }

@@ -12,6 +12,7 @@ import org.apache.flink.api.common.serialization.SimpleStringSchema;
 import org.apache.flink.api.common.typeinfo.Types;
 import org.apache.flink.api.java.functions.KeySelector;
 import org.apache.flink.api.java.tuple.Tuple2;
+import org.apache.flink.api.java.tuple.Tuple5;
 import org.apache.flink.runtime.state.filesystem.FsStateBackend;
 import org.apache.flink.streaming.api.CheckpointingMode;
 import org.apache.flink.streaming.api.TimeCharacteristic;
@@ -83,6 +84,7 @@ public class PVRealTimeTask {
         // 获取kafka源
         DataStreamSource<String> kafkaSource = env
             .addSource(new FlinkKafkaConsumer<>(PropertiesUtils.getString("kafka.topic"), new SimpleStringSchema(), properties));
+//            .addSource(new FlinkKafkaConsumer<>("test", new SimpleStringSchema(), properties));
 
 
         kafkaSource.filter(str -> str.startsWith("314\t")) // 意向用户
@@ -93,29 +95,30 @@ public class PVRealTimeTask {
 //                        System.out.println("输入的line:"+line);
                     String[] arr = line.split("\t", -1);
 //                        System.out.println("line的长度"+arr.length);
-                    if (arr.length >= 18) {
+                    if (arr.length >= 34) {
                         out.collect(new IntendUser(arr[4], // 入口模版
                             arr[2], // 状态码
                             arr[3], // 错误原因
-                            arr[1] // 时间戳
+                            arr[1], // 时间戳
+                            arr[33] // 运营商
                         ));
                     }
                 }
             })
             .assignTimestampsAndWatermarks(wms) // 添加watermark
-            .map(new RichMapFunction<IntendUser, Tuple2<Tuple4<String, String, String, String>, Long>>() {
+            .map(new RichMapFunction<IntendUser, Tuple2<Tuple5<String, String, String, String,String>, Long>>() { // IN,OUT
                 @Override
-                public Tuple2<Tuple4<String, String, String, String>, Long> map(IntendUser intenduser) throws Exception {
+                public Tuple2<Tuple5<String, String, String, String,String>, Long> map(IntendUser intenduser) throws Exception {
 //                        System.out.println("intenduser:\t"+intenduser);
                     SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH");
                     String format = sdf.format(new Date(Long.parseLong(intenduser.getTime()) * 1000L));
-                    return Tuple2.of(Tuple4.of(intenduser.getTemplateId(), intenduser.getCode(), intenduser.getMsg(), format), 1L); // templateId,code,msg作为key
+                    return Tuple2.of(Tuple5.of(intenduser.getTemplateId(), intenduser.getCode(), intenduser.getMsg(),intenduser.getCarrier(), format), 1L); // templateId,code,msg,carrier 作为key
                 }
             })
 //                .returns(Types.TUPLE(Types.TUPLE(Types.STRING,Types.STRING,Types.STRING),Types.LONG)) // 使用tuple类型,方便后面求和
-            .keyBy(new KeySelector<Tuple2<Tuple4<String, String, String, String>, Long>, Tuple4<String, String, String, String>>() {
+            .keyBy(new KeySelector<Tuple2<Tuple5<String,String, String, String, String>, Long>, Tuple5<String,String, String, String, String>>() {
                 @Override
-                public Tuple4<String, String, String, String> getKey(Tuple2<Tuple4<String, String, String, String>, Long> value) throws Exception {
+                public Tuple5<String, String, String, String, String> getKey(Tuple2<Tuple5<String, String, String, String, String>, Long> value) throws Exception {
                     return value.f0;
                 }
             })

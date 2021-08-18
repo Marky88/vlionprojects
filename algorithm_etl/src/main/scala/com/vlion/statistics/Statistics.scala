@@ -4,6 +4,7 @@ import java.text.SimpleDateFormat
 import java.util.Date
 
 import com.vlion.udfs.{MaxCountColUDAF, ParseBrandUDF, TimeUDAF}
+import com.vlion.util.Constant
 import org.apache.spark.sql.SparkSession
 
 
@@ -15,22 +16,24 @@ import org.apache.spark.sql.SparkSession
  */
 object Statistics {
 
-    val appIds = Array("30858","31433","30804")
+//    val appIds = Array("30858","31433","30804")
 
     def summaryDay(spark: SparkSession, etlDate: String): Unit = {
         spark.udf.register("max_count_col", new MaxCountColUDAF)
         spark.udf.register("time_process", new TimeUDAF(etlDate))
         spark.udf.register("parse_brand", new ParseBrandUDF().parseBrand _ )
 
-        summaryDayWithMedia(spark,etlDate,appIds)
-        summaryDayNoMedia(spark,etlDate,appIds)
+        summaryDayWithMedia(spark,etlDate,Constant.appIds)
+        summaryDayNoMedia(spark,etlDate,Constant.appIds)
 
-        val targetTable ="behavior.behavior_summary_day_2"
+        val targetTable ="behavior.behavior_summary_day_20210816"
 
         spark.sql(
             s"""
                |insert overwrite table $targetTable partition(etl_date = '${etlDate}')
                |select
+               |    t1.if_imp,
+               |    t1.if_clk,
                |    t1.app_id,
                |    t1.id,
                |    t1.adsolt_id,
@@ -49,6 +52,10 @@ object Statistics {
                |    t1.adsolt_type,
                |    t1.real_adsolt_width,
                |    t1.real_adsolt_height,
+               |    t1.hour,
+               |    t1.longitude,
+               |    t1.latitude,
+               |    t1.ua,
                |    t1.req_count,
                |    t1.req_rate, -- 竞价请求次数占比
                |    t1.req_avg_real_price, -- 竞价请求平均价格
@@ -134,6 +141,10 @@ object Statistics {
                |    t1.adsolt_type,
                |    t1.real_adsolt_width,
                |    t1.real_adsolt_height,
+               |    t1.hour,
+               |    t1.longitude,
+               |    t1.latitude,
+               |    t1.ua,
                |    t1.req_count,
                |    t1.req_rate, -- 竞价请求次数占比
                |    t1.avg_real_price as req_avg_real_price, -- 竞价请求平均价格
@@ -155,7 +166,9 @@ object Statistics {
                |    t3.min_interval as clk_min_interval,
                |    t3.max_interval as clk_max_interval,
                |    t3.avg_interval as clk_avg_interval,
-               |    t1.etl_date
+               |    t1.etl_date,
+               |    if(t2.imp_cnt >= 1,1,0) as if_imp,
+               |    if(t3.clk_cnt >= 1,1,0) as if_clk
                |from
                |( -- 媒体请求
                |    select
@@ -182,7 +195,11 @@ object Statistics {
                |        req_count/ sum(req_count) over(partition by id ) req_rate,  -- 竞价请求次数占比
                |        avg_real_price,
                |        max_real_price,
-               |        min_real_price
+               |        min_real_price,
+               |        hour,
+               |        longitude,
+               |        latitude,
+               |        ua
                |    from
                |    (
                |        select
@@ -209,7 +226,11 @@ object Statistics {
                |            -- 竞价请求次数占比
                |            avg(floor_price) as avg_real_price,  -- 竞价请求平均价格
                |            max(floor_price) as max_real_price,-- 竞价请求最高价格
-               |            min(floor_price) as min_real_price-- 竞价请求最低价格
+               |            min(floor_price) as min_real_price,-- 竞价请求最低价格
+               |            max(etl_hour) as hour,
+               |            max(longitude) as longitude,
+               |            max(latitude) as latitude,
+               |            max(user_agent) as ua
                |        from
                |        (
                |            select
@@ -240,7 +261,11 @@ object Statistics {
                |                if(real_adsolt_shape like '%x%',split(real_adsolt_shape,'x')[1],null) as real_adsolt_height,-- 广告位高
                |                etl_date, -- 日期
                |                1 as req_count, -- 竞价请求次数
-               |                floor_price -- 竞价请求价格
+               |                floor_price, -- 竞价请求价格
+               |                etl_hour,
+               |                longitude,
+               |                latitude,
+               |                user_agent
                |            from
                |            ods.ods_media_req where etl_date='${etlDate}' and time is not null and time!='' and app_id in (${appIdsStr})
                |        ) t

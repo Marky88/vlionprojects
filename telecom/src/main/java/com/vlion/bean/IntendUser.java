@@ -20,5 +20,6 @@ public class IntendUser {
     private String code ; // 状态码
     private String msg;// 错误原因
     private String time; // 时间（年月日小时），示例：2021062511
+    private String carrier; // 运营商
 //    private String pv ;// 频次
 }
