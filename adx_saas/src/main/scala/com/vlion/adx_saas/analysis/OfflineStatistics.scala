@@ -34,6 +34,7 @@ object OfflineStatistics {
             .rdd
             .repartition(2)
             .map(r => r.getAs[String]("pkg_name"))
+            .filter(_.length < 500) // 长度超长了
             .foreachPartition(iter => {
                 Class.forName(MySQL.driver)
                 val conn = DriverManager.getConnection(MySQL.url, MySQL.user, MySQL.password)
@@ -71,7 +72,7 @@ object OfflineStatistics {
               |pkg_id is not null and media_id is not null""".stripMargin)
             )
             .withColumn("update_time", lit(s"${etlDate} ${etlHour}:00:00"))
-            .withColumn("del", lit("no"))
+            .withColumn("del", lit("no")).repartition(500)
                 .createOrReplaceTempView("resDF")
 
         val resDF2 = spark.sql( // 有正则,比较麻烦,使用raw插值
@@ -120,18 +121,9 @@ object OfflineStatistics {
                |group by
                |    time,hour,time_format,dsp_id,target_id,media_id,posid_id,pkg_id,country_id,platform_id,style_id,mlevel_id,del,update_time
                |""".stripMargin)
-            .coalesce(5)
+//            .coalesce(5)
             .persist(StorageLevel.MEMORY_AND_DISK)
 
-        resDF2
-            .write.mode("append")
-            .format("jdbc")
-            .option("url", MySQL.url)
-            .option("driver", MySQL.driver)
-            .option("user", MySQL.user)
-            .option("password", MySQL.password)
-            .option("dbtable", mysqlStateTableName)
-            .save()
 
         //        val prop=new java.util.Properties()
         //        prop.put("driver",MySQL.driver)
@@ -145,7 +137,7 @@ object OfflineStatistics {
 //        insertUpdateMysql(spark, resDF, 12, mysqlStateTableName)
 
         // 导入到impala
-        resDF2.createOrReplaceTempView("resDF2")
+        resDF2.coalesce(1).createOrReplaceTempView("resDF2")
 
         // 导入到impala/hive表中
         spark.sql(
@@ -186,6 +178,23 @@ object OfflineStatistics {
                |""".stripMargin)
 
 
+        try{
+            // 导入到mysql
+            resDF2
+                .repartition(10)
+                .write.mode("append")
+                .format("jdbc")
+                .option("url", MySQL.url)
+                .option("driver", MySQL.driver)
+                .option("user", MySQL.user)
+                .option("password", MySQL.password)
+                .option("dbtable", mysqlStateTableName)
+                .save()
+        }catch {
+            case e:Exception => e.printStackTrace()
+        }
+
+
     }
 
 
@@ -211,12 +220,12 @@ object OfflineStatistics {
             val colTuple = allColsSeq.zipWithIndex.map(t => (t._1, t._2 + 1))
             //            println("colTuple: "+colTuple)
 
-            list.map(row => {
+            list map (row => {
                 //                println("=" * 10)
                 //                println(row)
                 //                println("=" * 10)
 
-                colTuple.foreach { case (colName, pstmtIndex) =>
+                colTuple foreach { case (colName, pstmtIndex) =>
                     // println(pstmtIndex,row.getAs[String](colName))
                     // 插入每条数据
                     pstmt.setObject(pstmtIndex, row.getAs[String](colName))

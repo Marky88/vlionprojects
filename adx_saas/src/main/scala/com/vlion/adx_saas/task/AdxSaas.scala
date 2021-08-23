@@ -17,7 +17,7 @@ object AdxSaas {
         implicit val spark: SparkSession = SparkSession
             .builder()
             //     .master("local[*]")
-            .appName("AdxSaasDsp")
+            .appName("AdxSaas")
             .config("hive.metastore.uris","trift://www.bigdata02.com:9083")
             .config("spark.sql.warehouse.dir", "/user/hive/warehouse")
             .config("hive.metastore.warehouse.dir","/user/hive/warehouse")
@@ -35,7 +35,7 @@ object AdxSaas {
         LoadHive.loadHive(spark,etlDate,etlHour)
         OfflineStatistics.hourSummary(spark,etlDate,etlHour)
 
-
+        spark.sparkContext.stop()
 
     }
 
