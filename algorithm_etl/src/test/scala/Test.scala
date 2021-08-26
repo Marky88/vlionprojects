@@ -28,6 +28,18 @@ object Test {
         val tuple = rdd.aggregate((0, 0))((c, e) => (c._1 + e, c._2 + 1), (c1, c2) => (c1._1 + c2._1, c1._2 + c2._2))
         println(tuple)
 
+        rdd.mapPartitions { iter =>
+            val tuple1 = ((0,0) /: iter){case (tuple,e) =>
+                (tuple._1+e,tuple._2+1)
+            }
+            List(tuple1).iterator
+        }.collect().reduceLeft((x,y) => (x._1+y._1,x._2+y._2))
+
+        rdd.map((_,1)).reduce((x,y) => (x._1+y._1,x._2+y._2))
+
+
+
+
 
     }
 

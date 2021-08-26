@@ -15,6 +15,10 @@
         <module>adx_saas</module>
         <module>algorithm_etl</module>
         <module>hippo</module>
+        <module>affiliate</module>
+        <module>smammu</module>
+        <module>mammu</module>
+        <module>zebra</module>
     </modules>
     <packaging>pom</packaging>
     <properties>

@@ -29,13 +29,22 @@ object AdxSaas {
         val etlDate = args(0)
         val etlHour = args(1)
 
-
+        val sc = spark.sparkContext
         OfflineStatistics.updateMysqlPkg(spark,etlDate,etlHour) // 先更新维护的mysql表的数据
         LoadMySql.readMysql // 加载mysql的数据
         LoadHive.loadHive(spark,etlDate,etlHour)
         OfflineStatistics.hourSummary(spark,etlDate,etlHour)
 
         spark.sparkContext.stop()
+
+
+        val rdd = sc.makeRDD(List(("张三",90,91,92),("李四",89,90,91),("王五",88,92,95)))
+
+
+
+        rdd.flatMap{case (name,yuwen,shuxue,yingyu) =>
+            List((name,"yw",yuwen),(name,"sx",shuxue),(name,"yy",yingyu))
+        }.collect
 
     }
 

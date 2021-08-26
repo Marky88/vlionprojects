@@ -24,6 +24,12 @@
 <!--            <version>2.1.0</version>-->
 <!--        </dependency>-->
 
+        <!-- UserAgent分析处理 -->
+        <dependency>
+            <groupId>nl.bitwalker</groupId>
+            <artifactId>UserAgentUtils</artifactId>
+            <version>1.2.4</version>
+        </dependency>
 
     </dependencies>
 
