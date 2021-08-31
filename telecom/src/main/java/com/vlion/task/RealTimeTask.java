@@ -100,7 +100,7 @@ public class RealTimeTask {
                 if (value != null) {
                     String[] arr = value.split("\t", -1); // 要加-1
 //                    System.out.println("长度:"+ arr.length);
-                    if (arr[0].equals("316") && arr.length >= 38 && !arr[3].equals("")) { // 下单用户 consumer ,一定要有orderId
+                    if (arr[0].equals("316") && arr.length >= 44 && !arr[3].equals("")) { // 下单用户 consumer ,一定要有orderId
                         String orderId = arr[3];
                         String templateId = arr[4];
                         String cartNo = arr[5];
@@ -125,6 +125,7 @@ public class RealTimeTask {
                         String ip = arr[24]; //用户ip
                         String carrier = arr[33]; // 运营商
                         String gdtNoWXClkId = arr[37]; //gd5点击id(非微信)
+                        String vlionOrderId = arr[43]; // vlion订单id
                         // 获取
 //                        SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd hh:mm:ss");
 //                        Date date = sdf.parse(sdf.format(time * 1000));
@@ -158,6 +159,7 @@ public class RealTimeTask {
                         if(ip !=null && !ip.trim().equals("")) consumer.setIp(ip);
                         if(carrier != null && !carrier.trim().equals("")) consumer.setCarrier(carrier);
                         if(gdtNoWXClkId != null && !gdtNoWXClkId.trim().equals("")) consumer.setGdtNoWXClkId(gdtNoWXClkId);
+                        if(vlionOrderId != null && !vlionOrderId.trim().equals("")) consumer.setVlionOrderId(vlionOrderId);
 //                        System.out.println("输入的consumer:"+ consumer);
                         return Tuple2.of(arr[0], consumer);
                     } else if (arr[0].equals("317") && arr.length >= 19 && !arr[2].equals("")) { // 订单详情  order_details
@@ -378,7 +380,6 @@ public class RealTimeTask {
                 timeoutTs.clear();
             }
         });
-
         logTypeAndGENERIC.addSink(new MysqlSinkOneByOne()).name("mysql sink");
 //        logTypeAndGENERIC.print();
 

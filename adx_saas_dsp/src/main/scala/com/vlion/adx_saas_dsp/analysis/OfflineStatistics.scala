@@ -590,7 +590,6 @@ object OfflineStatistics {
     def adDimensionPreSummary(spark:SparkSession,etlDate:String,etlHour:String)={
         spark.sql(
             s"""
-               |insert overwrite table dm.dsp_detail_data_count partition(date='$etlDate',hour='$etlHour')
                |select
                |    downstream_id as channel_id,
                |    country_code as country,
@@ -633,8 +632,64 @@ object OfflineStatistics {
                |    stuff_id,
                |    stuff_shape,
                |    conversion_task_id
-               |
+               |""".stripMargin).repartition(1).persist().createOrReplaceTempView("dsp_detail_data_count_df")
+
+        // 设置分区数目为1
+        spark.sql(
+            s"""
+               |insert overwrite table dm.dsp_detail_data_count partition(date='$etlDate',hour='$etlHour')
+               |select * from dsp_detail_data_count_df
                |""".stripMargin)
+
+
+
+//        spark.sql(
+//            s"""
+//               |insert overwrite table dm.dsp_detail_data_count partition(date='$etlDate',hour='$etlHour')
+//               |select
+//               |    downstream_id as channel_id,
+//               |    country_code as country,
+//               |    adsolt_type as ad_type,
+//               |    adsolt_shape as ad_size,
+//               |    os,
+//               |    pkg_name as bundle,
+//               |    admaster_id as adv_id,
+//               |    plan_id as plan_id,
+//               |    creative_id as creative_id,
+//               |    stuff_id,
+//               |    stuff_shape as stuff_size,
+//               |    conversion_task_id as conversion_task,
+//               |    count(if(logtype='10',1,null)) as total_req,
+//               |    sum(if(logtype='10',floor_price,null)) as bid_floor_sum,
+//               |    count(if(logtype='11',1,null)) as offer_bid,
+//               |    sum(if(logtype='11',plan_price,null)) as offer_price,
+//               |    count(if(logtype='12',1,null)) as fill_req,
+//               |    sum(if(logtype='12',plan_price,null)) as bid_price,
+//               |    count(if(logtype='13',1,null)) as ssp_win,
+//               |    count(if(logtype='16',1,null)) as ssp_loss,
+//               |    count(if(logtype='14',1,null)) as imp,
+//               |    sum(if(logtype='14',win_price,null)) as clear_price,
+//               |    count(if(logtype='15',1,null)) as clk,
+//               |    count(if(logtype='17',1,null)) as conversion,
+//               |    sum(if(logtype='14',win_price,null)) as cost,
+//               |    sum(if(logtype='17',conversion_unit_price,null)) as revenue
+//               |from
+//               |    preprocess_table1
+//               |group by
+//               |    downstream_id,
+//               |    country_code,
+//               |    adsolt_type,
+//               |    adsolt_shape,
+//               |    os,
+//               |    pkg_name,
+//               |    admaster_id,
+//               |    plan_id,
+//               |    creative_id,
+//               |    stuff_id,
+//               |    stuff_shape,
+//               |    conversion_task_id
+//               |
+//               |""".stripMargin)
 
     }
 

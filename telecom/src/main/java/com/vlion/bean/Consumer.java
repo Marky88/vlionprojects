@@ -38,4 +38,5 @@ public class Consumer implements Serializable {
     private String ip; // 用户ip
     private String carrier; // 运营商
     private String gdtNoWXClkId; // 0-37的字段,第38列
+    private String vlionOrderId; // 44vlion订单id
 }

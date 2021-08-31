@@ -37,15 +37,6 @@ object AdxSaas {
 
         spark.sparkContext.stop()
 
-
-        val rdd = sc.makeRDD(List(("张三",90,91,92),("李四",89,90,91),("王五",88,92,95)))
-
-
-
-        rdd.flatMap{case (name,yuwen,shuxue,yingyu) =>
-            List((name,"yw",yuwen),(name,"sx",shuxue),(name,"yy",yingyu))
-        }.collect
-
     }
 
 }

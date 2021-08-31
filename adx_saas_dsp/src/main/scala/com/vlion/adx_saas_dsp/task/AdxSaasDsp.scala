@@ -34,7 +34,7 @@ object AdxSaasDsp {
         OfflineStatistics.planSummary(spark,etlDate,etlHour)
         OfflineStatistics.creativeSummary(spark,etlDate,etlHour)
         OfflineStatistics.downstreamSummary(spark,etlDate,etlHour)
-        OfflineStatistics.preprocessTable(spark,etlDate,etlHour)
+//        OfflineStatistics.preprocessTable(spark,etlDate,etlHour)
 
         OfflineStatistics.conversionDaySummary(spark,etlDate)
         OfflineStatistics.deviceConversionDay(spark,etlDate)

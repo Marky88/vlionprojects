@@ -119,6 +119,9 @@ public class MysqlSinkOneByOne extends RichSinkFunction<Tuple2<String, Object>> 
                 if(checkNotNull(consumer.getOrderMobilePhone())){
                     updateSql.append(" order_mobile_phone='").append(consumer.getOrderMobilePhone()).append("',");
                 }
+                if(checkNotNull(consumer.getVlionOrderId())){
+                    updateSql.append(" vlion_orderid='").append(consumer.getVlionOrderId()).append("',");
+                }
 
                 updateSql.append(" where order_id='").append(consumer.getOrderId()).append("'");
                 String sql = updateSql.toString().replaceAll(", +where", " where");
@@ -130,8 +133,8 @@ public class MysqlSinkOneByOne extends RichSinkFunction<Tuple2<String, Object>> 
                     if (statement.getUpdateCount() == 0) { // 如果没有更新
                         psCustom = conn.prepareStatement("insert into consumer(order_id,template_id," +
                                 "cart_no,buyer_name,mobile_phone,receiver_prov,receiver_city," +
-                            "receiver_district,receiver_adress,plan_id,creative_id,combo_type,is_choose_num,`time`,`date`, source_type,flow_type,pid,eid,ip,order_mobile_phone,carrier) " +
-                                "values(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)");
+                            "receiver_district,receiver_adress,plan_id,creative_id,combo_type,is_choose_num,`time`,`date`, source_type,flow_type,pid,eid,ip,order_mobile_phone,carrier,vlion_orderid) " +
+                                "values(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)");
                         //插入
                         psCustom.setString(1, consumer.getOrderId());
                         psCustom.setString(2, consumer.getTemplateId());
@@ -155,6 +158,7 @@ public class MysqlSinkOneByOne extends RichSinkFunction<Tuple2<String, Object>> 
                         psCustom.setString(20,consumer.getIp());
                         psCustom.setString(21,consumer.getOrderMobilePhone());
                         psCustom.setString(22,consumer.getCarrier());
+                        psCustom.setString(23,consumer.getVlionOrderId());
 
                         psCustom.execute();
                     }
