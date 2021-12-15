@@ -9,11 +9,16 @@ import com.mongodb.{DBCollection, MongoClient}
 import com.mongodb.client.MongoCollection
 import com.mongodb.client.model.{Filters, InsertManyOptions, UpdateOneModel, UpdateOptions, WriteModel}
 import org.apache.spark.rdd.RDD
-import org.apache.spark.sql.SparkSession
+import org.apache.spark.sql.{DataFrame, SparkSession}
 import org.bson.Document
 import org.bson.conversions.Bson
-
 import java.security.MessageDigest
+import java.sql.PreparedStatement
+
+import com.advlion.www.load.ClickHouse
+import org.apache.spark.sql.types.{BooleanType, DataType, DecimalType, DoubleType, FloatType, IntegerType, LongType, StringType}
+import ru.yandex.clickhouse.{ClickHouseConnection, ClickHouseDataSource}
+
 import scala.collection.JavaConverters._
 
 object OfflineStatistics {
@@ -29,7 +34,8 @@ object OfflineStatistics {
     val mongoDatabaseCrowd = "crowd"
     val mongoCollectionRta = "rta"
 
-    def summary(spark: SparkSession): Unit = {
+    //原始需求
+    /*def summary(spark: SparkSession): Unit = {
         val resultTable = "stat_day_dsp_offline"
         val result = spark.sql(
             """
@@ -68,6 +74,76 @@ object OfflineStatistics {
             .option("driver", driver)
             .option("dbtable", resultTable)
             .save()
+    }*/
+
+
+    def summary(spark: SparkSession): Unit = {
+        val resultTable = "mammu_stat_day_offline"
+
+        val resultDF = spark.sql(
+            """
+              |  select
+              |         s.etl_date,
+              |  		s.etl_hour,
+              |         s.etl_date_hour,
+              |  		s.plan_id,
+              |  		s.creative_id,
+              |  		s.adslot_id adslocation_id,
+              |         t.name as geo,
+              |         s.adsolt_group_name as bundle,
+              |  		s.channel_id,
+              |  		s.req,
+              |  		s.bid,
+              |  		s.imp,
+              |  		s.clk,
+              |         s.ocpx,
+              |  		cast(s.bid_real_cost as Decimal(18,10)) as bid_real_cost,
+              |         cast(s.imp_real_cost as Decimal(18,10)) as imp_real_cost,
+              |         s.alp_1,
+              |         s.alp_2,
+              |         s.alp_3,
+              |         s.alp_4,
+              |  		p.aduser_id as admaster_id,
+              |  		a.user_id as dev_id,
+              |  		a.media_id,
+              |  		a.joint_id,
+              |  		nvl(c.creative_group_id,'-1') creative_group_id,
+              |  		case when u.user_oem_id is null  then '-1' else u.user_oem_id end as agent_id
+              |  from	summary_tmp s
+              |  left	join plan p
+              |  on		s.plan_id = p.id
+              |  left	join creative c
+              |  on		s.creative_id = c.id
+              |  left	join adsLocation a
+              |  on		s.adslot_id = a.id
+              |  left	join user u
+              |  on		s.plan_id = u.id
+              |  left   join city t
+              |  on     s.geo = t.id
+              |""".stripMargin)
+
+
+       // resultDF.show(20)
+      //  resultDF.rdd.saveAsTextFile("/tmp/test/qwe.csv")
+
+
+
+        insertClickhouse(resultDF,ClickHouse.database,resultTable)
+
+
+
+ //原始需求保存到mysql
+/*
+//保存到mysql
+result.write.mode("append")
+            .format("jdbc")
+            .option("url", url)
+            .option("user", user)
+            .option("password", password)
+            .option("driver", driver)
+            .option("dbtable", resultTable)
+            .save()*/
+
     }
 
     /**
@@ -121,10 +197,10 @@ object OfflineStatistics {
                |                if(admaster_id = '21037','alipay','dhh') as model_type, -- 阿里/大航海
                |                if(length(imei) = 32,null,imei) as imei,
                |                if(length(imei) = 32,imei,md5(imei)) as imei_md5,
-               |                if(length(idfa) = 32,null,idfa) as idfa,
+               |                if(length(idfa) = 32,null,idfa) as idfa,        --长度为36呀
                |                if(length(idfa) = 32,idfa,md5(idfa)) as idfa_md5,
                |                oaid,
-               |                substring(ocpx_tag,5) as ocpx_tag, -- ocpx_类型
+               |                substring(ocpx_tag,5) as ocpx_tag, -- ocpx_类型     --substring(ocpx_tag,0,5) 截取前5位呀
                |                `time` as ocpx_time  -- 最后一次ocpx返回时间
                |            from
                |                ods.req_bid_imp_clk_55 t55
@@ -133,8 +209,8 @@ object OfflineStatistics {
                |        ) t
                |        lateral view explode(map("imei_md5",imei_md5,"idfa_md5",idfa_md5,"oaid",oaid)) tb55 as device_type,device_value
                |        where device_value is not null and device_value!=''
-               |      ) t
-               |        where r_n=1
+               |    ) t
+               |       where r_n=1
                |
                |union all
                | -- 点击日志54
@@ -153,7 +229,7 @@ object OfflineStatistics {
                |        (
                |            SELECT
                |                if(admaster_id = '21037','alipay','dhh') as model_type, -- 阿里/大航海
-               |                os, -- 操作系统,1安卓, 2ios
+               |                os, -- 操作系统,1安卓, 2 ios
                |                if(length(imei) = 32,null,imei) as imei,
                |                if(length(imei) = 32,imei,md5(imei)) as imei_md5,
                |                if(length(idfa) = 32,null,idfa) as idfa,
@@ -440,6 +516,76 @@ object OfflineStatistics {
         val md5 = MessageDigest.getInstance("MD5")
         val encoded = md5.digest((content).getBytes)
         encoded.map("%02x".format(_)).mkString
+    }
+
+
+    def insertClickhouse(dataframe:DataFrame,db:String,target_table:String)={
+        val columns = dataframe.columns
+        val coluName: String = columns.mkString(",")
+        val nums = columns.map(_ => "?").mkString(",")
+
+        val sql = s"insert into ${db}.${target_table} (${coluName}) values (${nums})"
+           println(sql)
+
+        val schema = dataframe.schema
+        val fields = schema.fields
+
+        dataframe.rdd.foreachPartition { iter =>
+            var conn: ClickHouseConnection = null
+            var pstmt: PreparedStatement = null
+
+            try {
+                Class.forName(ClickHouse.driver)
+                val source = new ClickHouseDataSource(s"jdbc:clickhouse://${ClickHouse.host}:${ClickHouse.port}")
+                conn = source.getConnection(ClickHouse.user, ClickHouse.password)
+                pstmt = conn.prepareStatement(sql)
+
+
+                var count = 0
+                iter.foreach { row =>
+                    fields.foreach { field =>
+                        val index = schema.fieldIndex(field.name)
+                        var value = row.get(index)
+                        if (null == value) value = defaultNullValue(field.dataType)
+                        pstmt.setObject(index + 1, value)
+                    }
+
+                    pstmt.addBatch()
+                    count += 1
+                    if (count > 1000){
+                        pstmt.executeBatch()
+                        count = 0
+                    }
+
+                }
+
+                pstmt.executeBatch()
+
+            } catch {
+                case e => e.printStackTrace()
+            }
+
+           if(null != pstmt) pstmt.close()
+           if (null != conn) conn.close()
+
+        }
+
+        dataframe.show(1)
+
+    }
+
+
+    def defaultNullValue(dataType:DataType):Any={
+        dataType match {
+            case DecimalType() => 0D
+            case FloatType => 0F
+            case DoubleType => 0.0
+            case IntegerType => 0
+            case LongType => 0L
+            case StringType => null
+            case BooleanType => false
+            case _ => null
+        }
     }
 
 

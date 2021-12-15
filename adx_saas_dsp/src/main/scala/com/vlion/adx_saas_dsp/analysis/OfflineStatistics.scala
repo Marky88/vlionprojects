@@ -1,12 +1,15 @@
 package com.vlion.adx_saas_dsp.analysis
 
-import java.sql.DriverManager
+import java.sql.{DriverManager, PreparedStatement}
 
-import com.vlion.adx_saas_dsp.jdbc.MySQL
+import com.vlion.adx_saas_dsp.analysis.OfflineStatistics.insertClickhouse
+import com.vlion.adx_saas_dsp.jdbc.{ClickHouse, MySQL}
 import org.apache.spark.SparkContext
 import org.apache.spark.broadcast.Broadcast
+import org.apache.spark.sql.types.{BooleanType, DataType, DecimalType, DoubleType, FloatType, IntegerType, LongType, StringType}
 import org.apache.spark.sql.{DataFrame, Row, SparkSession}
 import org.apache.spark.storage.StorageLevel
+import ru.yandex.clickhouse.{ClickHouseConnection, ClickHouseDataSource}
 
 import scala.collection.mutable
 
@@ -30,6 +33,8 @@ object OfflineStatistics {
     val dspConversionInfo = "dsp_conversion_info"
     val dspDeviceBidCnt = "dsp_device_bid_cnt" // 1.3.1 按天汇总设备转化数据
     val dspBundleBidCnt = "dsp_bundle_bid_cnt" // 1.3.2
+    val dspDetailDataCount = "dsp_detail_data_count"
+    val dspWinrateCnt = "dsp_winrate_cnt"
 
     /**
      * 将表预处理,得到一个视图
@@ -40,6 +45,8 @@ object OfflineStatistics {
      *                然后去重,选时间戳小的一条
      */
     def preprocessTable(spark: SparkSession, etlDate: String, etlHour: String): Unit={
+        // 临时过滤 TODO
+        spark.sql("set spark.sql.shuffle.partitions=1000")
         //日志类型+追踪ID+竞价请求ID+广告位ID 取时间戳小的
         spark.sql(
             s"""
@@ -81,6 +88,7 @@ object OfflineStatistics {
                |    from
                |        ods.ods_dsp_info
                |        where etl_date='${etlDate}' and etl_hour='${etlHour}'
+               |        and   (advlocation_id is not null and log_hour is not null)
                |) t
                |where r_n =1
                |
@@ -129,10 +137,12 @@ object OfflineStatistics {
                |    from
                |        ods.ods_dsp_info
                |        where etl_date='${etlDate}'
+               |        and   (advlocation_id is not null and log_hour is not null)
                |) t
                |where r_n =1
                |
                |""".stripMargin)
+            .repartition(1000)
             .persist(StorageLevel.MEMORY_AND_DISK)
             .createOrReplaceTempView("preprocess_table_day")
 
@@ -176,7 +186,7 @@ object OfflineStatistics {
                |    admaster_id,plan_id
                |""".stripMargin)
 
-        summaryDF.coalesce(5).write.mode("append")
+        summaryDF.coalesce(20).write.mode("append")
             .format("jdbc")
             .option("url",url)
             .option("driver",driver)
@@ -194,50 +204,85 @@ object OfflineStatistics {
      * @param etlHour
      */
     def creativeSummary(spark:SparkSession, etlDate: String, etlHour: String): Unit ={
-        val etlTime = etlDate + " " + etlHour + ":00:00"
+      //  val etlTime = etlDate + " " + etlHour + ":00:00"
         val creativeDF = spark.sql(
             s"""
                |select
-               |    '${etlDate}' as time,
-               |    '${etlTime}' as hour,
-               |    admaster_id,
-               |    plan_id,
-               |    creative_id,
-               |    adsolt_type as creative_type,
-               |    max(if(logtype='11' and r_n=1,plan_price,0)) as plan_price, --计划出价,取最新的
-               |    -- max(if(logtype='11' and r_n=1,real_price,0)) as real_price, --实际出价
-               |    count(if(logtype='11',1,null)) as bid_count, -- 计划出价次数
-               |    count(if(logtype='12',1,null)) as inner_win_count, -- 赢得内部竞价次数
-               |    count(if(logtype='12',1,null)) / count(if(logtype='11',1,null)) as inner_bid_succ_rate, --内部竞价成功率
-               |    count(if(logtype='13',1,null)) as outer_bid_succ_count, -- 外部竞价成功次数
-               |    count(if(logtype='13',1,null)) / count(if(logtype='12',1,null)) as outer_bid_succ_rate, --外部竞价成功率
-               |    count(if(logtype='16',1,null)) as outer_bid_fail_count,  -- 外部竞价失败次数
-               |    count(if(logtype='14',1,null)) as imp_count,  -- 曝光次数
-               |    count(if(logtype='14',1,null)) / count(if(logtype='13',1,null)) as imp_rate, -- 曝光率
-               |    sum(if(logtype='14',win_price,null)) / count(if(logtype='14',1,null)) as avg_win_price, -- 平均结算价
-               |    -- sum(if(logtype='14',win_price,0)) as real_cost,  -- 实际消耗
-               |    count(if(logtype='15',logtype,null)) as clk_count,  -- 点击次数
-               |    count(if(logtype='15',logtype,null)) / count(if(logtype='14',1,null)) as clk_rate, -- 点击率
-               |    count(if(logtype='17',logtype,null)) as trans_count,  -- 转化数
-               |    count(if(logtype='17',logtype,null)) / count(if(logtype='15',logtype,null)) as trans_rate, -- 转化率
-               |    sum(if(logtype='14',win_price,null)) /1000 as total_cost, -- 总消耗
-               |    (sum(if(logtype='14',win_price,null)) / 1000 ) / count(if(logtype='17',1,null)) as trans_cost, -- 转化成本
-               |    sum(if(logtype='17',conversion_unit_price,null)) as total_earning, -- 总收益
-               |    sum(if(logtype='17',conversion_unit_price,null)) - sum(if(logtype='14',win_price,null)) /1000 as profit, -- 利润
-               |    '0' as process_status  -- 状态 0: 处理中  1: 成功
-               |from (
-               |    select
-               |        *,
-               |        row_number() over(partition by logtype,admaster_id,plan_id,creative_id,adsolt_type order by `time` desc) as r_n -- 每种日志分区,取最大的
-               |    from
-               |        preprocess_table1
-               |    where logtype !='10'
-               |    ) t
-               |group by
-               |    admaster_id,plan_id,creative_id,adsolt_type
+               |  etl_date,
+               |  etl_hour,
+               |  admaster_id,
+               |  plan_id,
+               |  creative_id,
+               |  creative_type,
+               |  cast(plan_price as Decimal(18,3)) as plan_price,
+               |  bid_count,
+               |  inner_win_count,
+               |  cast(inner_bid_succ_rate as Decimal(18,4)) as inner_bid_succ_rate,
+               |  outer_bid_succ_count,
+               |  cast(outer_bid_succ_rate as Decimal(18,4)) as outer_bid_succ_rate,
+               |  outer_bid_fail_count,
+               |  imp_count,
+               |  cast(imp_rate as Decimal(18,4)) as imp_rate,
+               |  cast(avg_win_price as Decimal(18,3)) as avg_win_price,
+               |  clk_count,
+               |  cast(clk_rate as Decimal(18,4)) as clk_rate,
+               |  trans_count,
+               |  cast(trans_rate as Decimal(18,4)) as trans_rate,
+               |  cast(total_cost as Decimal(18,3)) as total_cost,
+               |  cast(trans_cost as Decimal(18,3)) as trans_cost,
+               |  cast(total_earning as Decimal(18,3)) as total_earning,
+               |  cast(profit as Decimal(18,3)) as profit,
+               |  process_status,
+               |  '${etlDate} ${etlHour}:00:00' as etl_date_time    --需要单引号
+               |from
+               |(
+               |   select
+               |       '${etlDate}' as etl_date,
+               |       '${etlHour}' as etl_hour,
+               |       admaster_id,
+               |       plan_id,
+               |       creative_id,
+               |       adsolt_type as creative_type,
+               |       max(if(logtype='11' and r_n=1,plan_price,0)) as plan_price, --计划出价,取最新的
+               |       -- max(if(logtype='11' and r_n=1,real_price,0)) as real_price, --实际出价
+               |       count(if(logtype='11',1,null)) as bid_count, -- 计划出价次数
+               |       count(if(logtype='12',1,null)) as inner_win_count, -- 赢得内部竞价次数
+               |       count(if(logtype='12',1,null)) / count(if(logtype='11',1,null)) as inner_bid_succ_rate, --内部竞价成功率
+               |       count(if(logtype='13',1,null)) as outer_bid_succ_count, -- 外部竞价成功次数
+               |       count(if(logtype='13',1,null)) / count(if(logtype='12',1,null)) as outer_bid_succ_rate, --外部竞价成功率
+               |       count(if(logtype='16',1,null)) as outer_bid_fail_count,  -- 外部竞价失败次数
+               |       count(if(logtype='14',1,null)) as imp_count,  -- 曝光次数
+               |       count(if(logtype='14',1,null)) / count(if(logtype='13',1,null)) as imp_rate, -- 曝光率
+               |       sum(if(logtype='14',win_price,null)) / count(if(logtype='14',1,null)) as avg_win_price, -- 平均结算价
+               |       -- sum(if(logtype='14',win_price,0)) as real_cost,  -- 实际消耗
+               |       count(if(logtype='15',logtype,null)) as clk_count,  -- 点击次数
+               |       count(if(logtype='15',logtype,null)) / count(if(logtype='14',1,null)) as clk_rate, -- 点击率
+               |       count(if(logtype='17',logtype,null)) as trans_count,  -- 转化数
+               |       count(if(logtype='17',logtype,null)) / count(if(logtype='15',logtype,null)) as trans_rate, -- 转化率
+               |       sum(if(logtype='14',win_price,null)) /1000 as total_cost, -- 总消耗
+               |       (sum(if(logtype='14',win_price,null)) / 1000 ) / count(if(logtype='17',1,null)) as trans_cost, -- 转化成本
+               |       sum(if(logtype='17',conversion_unit_price,null)) as total_earning, -- 总收益
+               |       sum(if(logtype='17',conversion_unit_price,null)) - sum(if(logtype='14',win_price,null)) /1000 as profit, -- 利润
+               |       '0' as process_status  -- 状态 0: 处理中  1: 成功
+               |   from (
+               |       select
+               |           *,
+               |           row_number() over(partition by logtype,admaster_id,plan_id,creative_id,adsolt_type order by `time` desc) as r_n -- 每种日志分区,取最大的
+               |       from
+               |           preprocess_table1
+               |       where logtype !='10'
+               |       ) t
+               |   group by
+               |       admaster_id,plan_id,creative_id,adsolt_type
+               |) t
+               |
                |""".stripMargin)
 
-        creativeDF
+        insertClickhouse(creativeDF,ClickHouse.database,dspBudgetHourExpendCr)
+
+
+
+/*        creativeDF
             .coalesce(5)
             .write.mode("append")
             .format("jdbc")
@@ -246,7 +291,10 @@ object OfflineStatistics {
             .option("user",user)
             .option("password",password)
             .option("dbtable",dspBudgetHourExpendCr)
-            .save()
+            .save()*/
+
+
+
 
     }
 
@@ -260,7 +308,7 @@ object OfflineStatistics {
      */
     def downstreamSummary(spark:SparkSession, etlDate: String, etlHour: String): Unit ={
         val etlTime = etlDate + " " + etlHour + ":00:00"
-        val downstreamDF =spark.sql(
+        val downstreamDF: DataFrame =spark.sql(
             s"""
                |select
                |    '${etlDate}' as time,
@@ -577,6 +625,13 @@ object OfflineStatistics {
 
     }
 
+
+
+
+
+
+
+
     /**
      * 1.4 广告全量数据预聚合
      * 按 "日志类型+追踪ID+竞价请求ID+广告位ID" 去重
@@ -591,56 +646,165 @@ object OfflineStatistics {
         spark.sql(
             s"""
                |select
-               |    downstream_id as channel_id,
-               |    country_code as country,
-               |    adsolt_type as ad_type,
-               |    adsolt_shape as ad_size,
-               |    os,
-               |    pkg_name as bundle,
-               |    admaster_id as adv_id,
-               |    plan_id as plan_id,
-               |    creative_id as creative_id,
-               |    stuff_id,
-               |    stuff_shape as stuff_size,
-               |    conversion_task_id as conversion_task,
-               |    count(if(logtype='10',1,null)) as total_req,
-               |    sum(if(logtype='10',floor_price,null)) as bid_floor_sum,
-               |    count(if(logtype='11',1,null)) as offer_bid,
-               |    sum(if(logtype='11',plan_price,null)) as offer_price,
-               |    count(if(logtype='12',1,null)) as fill_req,
-               |    sum(if(logtype='12',plan_price,null)) as bid_price,
-               |    count(if(logtype='13',1,null)) as ssp_win,
-               |    count(if(logtype='16',1,null)) as ssp_loss,
-               |    count(if(logtype='14',1,null)) as imp,
-               |    sum(if(logtype='14',win_price,null)) as clear_price,
-               |    count(if(logtype='15',1,null)) as clk,
-               |    count(if(logtype='17',1,null)) as conversion,
-               |    sum(if(logtype='14',win_price,null)) as cost,
-               |    sum(if(logtype='17',conversion_unit_price,null)) as revenue
+               |   channel_id,
+               |   country,
+               |   ad_type,
+               |   ad_size,
+               |   os,
+               |   bundle,
+               |   adv_id,
+               |   plan_id,
+               |   creative_id,
+               |   stuff_id,
+               |   stuff_size,
+               |   conversion_task,
+               |   total_req,
+               |   cast(bid_floor_sum as Decimal(18,10)) as bid_floor_sum,
+               |   offer_bid,
+               |   cast(offer_price as Decimal(18,10)) as offer_price,
+               |   fill_req,
+               |   cast(bid_price as Decimal(18,10)) as bid_price,
+               |   ssp_win,
+               |   ssp_loss,
+               |   imp,
+               |   cast(clear_price as Decimal(18,10)) as clear_price,
+               |   clk,
+               |   conversion,
+               |   cast(cost as Decimal(18,10)) as cost,
+               |   cast(revenue as Decimal(18,10)) as revenue,
+               |   "${etlDate}" as etl_date,
+               |   "${etlHour}" as etl_hour,
+               |   '${etlDate} ${etlHour}:00:00' as etl_date_time,
+               |   cast(fill_bid_floor_sum as Decimal(18,10)) as fill_bid_floor_sum
                |from
-               |    preprocess_table1
-               |group by
-               |    downstream_id,
-               |    country_code,
-               |    adsolt_type,
-               |    adsolt_shape,
-               |    os,
-               |    pkg_name,
-               |    admaster_id,
-               |    plan_id,
-               |    creative_id,
-               |    stuff_id,
-               |    stuff_shape,
-               |    conversion_task_id
-               |""".stripMargin).repartition(1).persist().createOrReplaceTempView("dsp_detail_data_count_df")
+               |(
+               |   select
+               |       downstream_id as channel_id,
+               |       country_code as country,
+               |       adsolt_type as ad_type,
+               |       adsolt_shape as ad_size,
+               |       os,
+               |       pkg_name as bundle,
+               |       admaster_id as adv_id,
+               |       plan_id as plan_id,
+               |       creative_id as creative_id,
+               |       stuff_id,
+               |       stuff_shape as stuff_size,
+               |       conversion_task_id as conversion_task,
+               |       count(if(logtype='10',1,null)) as total_req,
+               |       sum(if(logtype='10',floor_price,null)) as bid_floor_sum,
+               |       count(if(logtype='11',1,null)) as offer_bid,
+               |       sum(if(logtype='11',plan_price,null)) as offer_price,
+               |       count(if(logtype='12',1,null)) as fill_req,
+               |       sum(if(logtype='12',plan_price,null)) as bid_price,
+               |       count(if(logtype='13',1,null)) as ssp_win,
+               |       count(if(logtype='16',1,null)) as ssp_loss,
+               |       count(if(logtype='14',1,null)) as imp,
+               |       sum(if(logtype='14',win_price,null)) as clear_price,
+               |       count(if(logtype='15',1,null)) as clk,
+               |       count(if(logtype='17',1,null)) as conversion,
+               |       sum(if(logtype='14',win_price,null)) as cost,
+               |       sum(if(logtype='17',conversion_unit_price,null)) as revenue,
+               |       sum(if(logtype='12',floor_price,null)) as fill_bid_floor_sum
+               |   from
+               |       preprocess_table1
+               |   group by
+               |       downstream_id,
+               |       country_code,
+               |       adsolt_type,
+               |       adsolt_shape,
+               |       os,
+               |       pkg_name,
+               |       admaster_id,
+               |       plan_id,
+               |       creative_id,
+               |       stuff_id,
+               |       stuff_shape,
+               |       conversion_task_id
+               |) t
+               |""".stripMargin).persist().createOrReplaceTempView("preprocess_data")
 
+
+        val planDF: DataFrame = spark.read.jdbc(MySQL.url, "t_plan", MySQL.prop)
+        planDF.persist().createOrReplaceTempView("dsp_plan")
+
+        val creativeDF = spark.read.jdbc(MySQL.url, "t_creative", MySQL.prop)
+        creativeDF.persist().createOrReplaceTempView("dsp_creative")
+
+        val organizationDF = spark.read.jdbc(MySQL.url, "t_organization", MySQL.prop)
+        organizationDF.persist().createOrReplaceTempView("dsp_oraganization")
+
+        val dsp_detail_data_count_DF = spark.sql(
+            """
+              |
+              |select
+              |  channel_id,
+              |  country,
+              |  ad_type,
+              |  ad_size,
+              |  os,
+              |  bundle,
+              |  adv_id,
+              |  adv_name,
+              |  plan_id,
+              |  plan_name,
+              |  creative_id,
+              |  creative_name,
+              |  stuff_id,
+              |  stuff_size,
+              |  conversion_task,
+              |  total_req,
+              |  bid_floor_sum,
+              |  offer_bid,
+              |  offer_price,
+              |  fill_req,
+              |  bid_price,
+              |  ssp_win,
+              |  ssp_loss,
+              |  imp,
+              |  clear_price,
+              |  clk,
+              |  conversion,
+              |  cost,
+              |  revenue,
+              |  etl_date,
+              |  etl_hour,
+              |  etl_date_time,
+              |  fill_bid_floor_sum
+              |from
+              |(
+              |   select
+              |       t1.*,
+              |       t2.name as plan_name,
+              |       t3.name as creative_name,
+              |       t4.name as adv_name
+              |   from
+              |     preprocess_data t1
+              |   left join
+              |     dsp_plan t2
+              |   on t1.plan_id = t2.plan_num
+              |   left join
+              |     dsp_creative t3
+              |   on t1.creative_id = t3.creative_num
+              |   left join
+              |     dsp_oraganization t4
+              |   on t1.adv_id = t4.organ_id
+              |) t
+              |""".stripMargin
+        )
+
+        insertClickhouse(dsp_detail_data_count_DF, ClickHouse.database, dspDetailDataCount)
+
+
+/*
+    之前的逻辑:写入hive表
         // 设置分区数目为1
         spark.sql(
             s"""
                |insert overwrite table dm.dsp_detail_data_count partition(date='$etlDate',hour='$etlHour')
-               |select * from dsp_detail_data_count_df
+               |select * from dsp_detail_data_count_df2
                |""".stripMargin)
-
+*/
 
 
 //        spark.sql(
@@ -691,6 +855,193 @@ object OfflineStatistics {
 //               |
 //               |""".stripMargin)
 
+
+    }
+
+
+
+    /**
+     *1.3.4 按小时统计 WinRate 数据
+     *表名：dsp_winrate_cnt   写入mysql
+     * 在1.4的广告全量数据预聚合表上处理
+     *
+     * 统计维度：计划ID＋国家+广告位类型+Bundle+广告位尺寸
+     * 汇总数据：总请求数、底价平均值、总填充数、填充平均值、SspWin、WinRate
+     * 查询条件：填充总数 > 1000 且 WinRate > 0.5
+     *
+     */
+
+    def dspWinrateCntHour(spark:SparkSession,etl_date:String,etl_hour:String) ={
+
+        val  dsp_Winrate_Cnt_DF= spark.sql(
+            s"""
+               |select
+               |  '${etl_date} ${etl_hour}:00:00' as date_hour,
+               |  Country,
+               |  Bundle,
+               |  AdType,
+               |  AdSize,
+               |  CampaignId,
+               |  TotalReq,
+               |  BidFloorAvg,
+               |  BidReq,
+               |  BidPriceAvg,
+               |  Sspwin,
+               |  WinRate,
+               |  0 as Status,   --状态 0表示处理中,1表示成功
+               |  Conversion,
+               |  CPA,
+               |  0.5 as query_condition
+               |from
+               |  (
+               |  select
+               |    country as Country,
+               |    bundle as Bundle,
+               |    ad_type as AdType,
+               |    ad_size as AdSize,
+               |    plan_id as CampaignId,
+               |    sum(total_req) as TotalReq,
+               |    if(sum(total_req) != '0',sum(bid_floor_sum)/sum(total_req),0) as BidFloorAvg,
+               |    sum(fill_req) as BidReq,
+               |    if(sum(fill_req) != '0',sum(bid_price)/sum(fill_req),0) as BidPriceAvg,
+               |    sum(ssp_win) as Sspwin,
+               |    if(sum(fill_req) != '0',sum(ssp_win)/sum(fill_req),0)as WinRate,
+               |    sum(conversion) as Conversion,
+               |    if(sum(conversion) != '0',sum(cost)/sum(conversion),0) as CPA
+               |  from
+               |    preprocess_data
+               |  group by
+               |    plan_id,
+               |    country,
+               |    ad_type,
+               |    bundle,
+               |    ad_size
+               |  ) t
+               |where
+               |  t.BidReq > 1000  and  WinRate > 0.5
+               |union all
+               |select
+               |  '${etl_date} ${etl_hour}:00:00' as date_hour,
+               |  Country,
+               |  Bundle,
+               |  AdType,
+               |  AdSize,
+               |  CampaignId,
+               |  TotalReq,
+               |  BidFloorAvg,
+               |  BidReq,
+               |  BidPriceAvg,
+               |  Sspwin,
+               |  WinRate,
+               |  0 as Status,   --状态 0表示处理中,1表示成功
+               |  Conversion,
+               |  CPA,
+               |  0.3 as query_condition
+               |from
+               |  (
+               |  select
+               |    country as Country,
+               |    bundle as Bundle,
+               |    ad_type as AdType,
+               |    ad_size as AdSize,
+               |    plan_id as CampaignId,
+               |    sum(total_req) as TotalReq,
+               |    if(sum(total_req) !='0',sum(bid_floor_sum)/sum(total_req),0) as BidFloorAvg,
+               |    sum(fill_req) as BidReq,
+               |    if(sum(fill_req) != '0',sum(bid_price)/sum(fill_req),0) as BidPriceAvg,
+               |    sum(ssp_win) as Sspwin,
+               |    if(sum(fill_req) != '0',sum(ssp_win)/sum(fill_req),0)as WinRate,
+               |    sum(conversion) as Conversion,
+               |    if(sum(conversion) != '0',sum(cost)/sum(conversion),0) as CPA
+               |  from
+               |    preprocess_data
+               |  group by
+               |    plan_id,
+               |    country,
+               |    ad_type,
+               |    bundle,
+               |    ad_size
+               |  ) t
+               |where
+               |  t.BidReq > 1000  and  WinRate < 0.3
+               |""".stripMargin
+        )
+
+
+        insertUpdateMysql(spark,dsp_Winrate_Cnt_DF,2,dspWinrateCnt)
+
+    }
+
+
+
+
+    def insertClickhouse(dataframe:DataFrame,db:String,target_table:String)={
+        val columns = dataframe.columns
+        val coluName: String = columns.mkString(",")
+        val nums = columns.map(_ => "?").mkString(",")
+
+        val sql = s"insert into ${db}.${target_table} (${coluName}) values (${nums})"
+        //   println(sql)
+
+        val schema = dataframe.schema
+        val fields = schema.fields
+
+        dataframe.rdd.foreachPartition { iter =>
+            var conn: ClickHouseConnection = null
+            var pstmt: PreparedStatement = null
+
+            try {
+                Class.forName(ClickHouse.driver)
+                val source = new ClickHouseDataSource(s"jdbc:clickhouse://${ClickHouse.host}:${ClickHouse.port}")
+                conn = source.getConnection(ClickHouse.user, ClickHouse.password)
+                pstmt = conn.prepareStatement(sql)
+
+
+                var count = 0
+                iter.foreach { row =>
+                    fields.foreach { field =>
+                        val index = schema.fieldIndex(field.name)
+                        var value = row.get(index)
+                        if (null == value) value = defaultNullValue(field.dataType)
+                        pstmt.setObject(index + 1, value)
+                    }
+
+                    pstmt.addBatch()
+                    count += 1
+                    if (count > 1000){
+                        pstmt.executeBatch()
+                        count = 0
+                    }
+
+                }
+
+                pstmt.executeBatch()
+
+            } catch {
+                case e =>e.printStackTrace()
+            }
+
+            pstmt.close()
+            conn.close()
+
+        }
+
+        dataframe.show(1)
+
+    }
+
+
+    def defaultNullValue(dataType:DataType):Any={
+        dataType match {
+            case DecimalType() => 0D
+            case FloatType => 0F
+            case DoubleType => 0.0
+            case IntegerType => 0
+            case LongType => 0L
+            case StringType => null
+            case BooleanType => false
+            case _ => null
+        }
     }
 
     // 自定义导入mysql

@@ -12,7 +12,7 @@ object Mammu {
     val spark = SparkSession
       .builder()
       //     .master("local[*]")
-      .appName("Mammu/Ssp")
+      .appName("Mammu_Ssp_BI")
       .config("hive.metastore.uris","thrift://www.bigdata02.com:9083")
       .config("spark.sql.warehouse.dir", "/user/hive/warehouse")
       .config("hive.metastore.warehouse.dir","/user/hive/warehouse")
@@ -20,11 +20,11 @@ object Mammu {
       .enableHiveSupport()
       .getOrCreate()
     spark.sparkContext.setLogLevel("WARN")
-//    ImportData.importMySQL(spark:SparkSession)
-//    LoadHive.readHive(spark:SparkSession,args: Array[String])
-//    OfflineStatistics.summary(spark: SparkSession)
+    ImportData.importMySQL(spark:SparkSession)
+    LoadHive.readHive(spark:SparkSession,args: Array[String])
+    OfflineStatistics.summary(spark: SparkSession)
 
     //先暂时不跑,mongodb跑不动
-    OfflineStatistics.uploadToMongoDB(spark,args(0),args(1))
+ //   OfflineStatistics.uploadToMongoDB(spark,args(0),args(1))
   }
 }

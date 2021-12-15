@@ -2,6 +2,7 @@ package com.vlion
 
 import com.vlion.statistics.Statistics
 import com.vlion.udfs.{MaxCountColUDAF, ParseBrandUDF, TimeUDAF}
+import com.vlion.util.Constant
 import org.apache.log4j.{Level, Logger}
 import org.apache.spark.sql.{Row, SparkSession}
 
@@ -21,10 +22,13 @@ object Task {
             .config("spark.sql.warehouse.dir", "/user/hive/warehouse")
             .config("hive.metastore.warehouse.dir","/user/hive/warehouse")
             .config("spark.debug.maxToStringFields","100")
+            //.config("spark.sql.shuffle.partitions","4")
             .enableHiveSupport()
             .getOrCreate()
 
         Statistics.summaryDay(spark,args(0))
+  //      Statistics.summaryDayWithMedia(spark,args(0),Constant.appIds)
+    //    Statistics.mediaLinkOcpx(spark,args(0),Constant.appIds)
 //        Statistics.summaryCalculateDay(spark,args(0),3)
 //        Statistics.summaryCalculateDay(spark,args(0),7)
 //        Statistics.summaryCalculateDay(spark,args(0),14)

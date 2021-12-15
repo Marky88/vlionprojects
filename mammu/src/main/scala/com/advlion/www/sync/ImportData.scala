@@ -28,11 +28,17 @@ object ImportData {
       .options(Map("url" -> uri, "dbtable" -> "user"))
       .load()
       .persist(StorageLevel.MEMORY_AND_DISK_SER)
+    val cityDF = spark.read.format("jdbc")
+        .options(Map("url" -> uri, "dbtable" -> "city"))
+        .load()
+        .persist(StorageLevel.MEMORY_AND_DISK_SER)
+
 
     adsLocationDF.createOrReplaceTempView("adsLocation")
     creativeDF.createOrReplaceTempView("creative")
     planDF.createOrReplaceTempView("plan")
     userDF.createOrReplaceTempView("user")
+    cityDF.createOrReplaceTempView("city")
 
   }
 }

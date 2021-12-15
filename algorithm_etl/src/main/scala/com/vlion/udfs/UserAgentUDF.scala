@@ -14,6 +14,7 @@ object UserAgentUDF {
         if(uaStr == null || uaStr.trim == ""){
             return ""
         }
+
         val userAgent = UserAgent.parseUserAgentString(uaStr)
         var name = userAgent.getBrowser.getGroup.getName
         if(name contains(" ")){

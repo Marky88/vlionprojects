@@ -56,11 +56,13 @@ public class RealTimeTask {
         properties.setProperty("bootstrap.servers", PropertiesUtils.getString("kafka.bootstrap.servers"));
         properties.setProperty("group.id", PropertiesUtils.getString("kafka.group.id"));
         properties.setProperty("auto.offset.reset", "latest");
+        //properties.setProperty("auto.offset.reset", "earliest");
 
         //1.创建执行环境
         StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
 
-        // 1.状态后端配置
+
+     // 1.状态后端配置
         env.setStateBackend(new FsStateBackend(PropertiesUtils.getString("flink.checkpoint.dir")));
         // 2.检查点配置
         env.enableCheckpointing(5000);
@@ -90,6 +92,8 @@ public class RealTimeTask {
                 .addSource(new FlinkKafkaConsumer<>(PropertiesUtils.getString("kafka.topic"), new SimpleStringSchema(), properties));
 //                  .addSource(new FlinkKafkaConsumer<>("test", new SimpleStringSchema(), properties));
 
+       // kafkaSource.print("producer:");
+
         // 这边使用处理时间吧
         SingleOutputStreamOperator<Tuple2<String, Object>> logTypeAndGENERIC = kafkaSource
             .map(new RichMapFunction<String, Tuple2<String, Object>>() {
@@ -98,9 +102,9 @@ public class RealTimeTask {
 //                System.out.println("输入: "+value);
 //                System.out.println("输入数据的长度:"+value.split("\t",-1).length);
                 if (value != null) {
-                    String[] arr = value.split("\t", -1); // 要加-1
-//                    System.out.println("长度:"+ arr.length);
-                    if (arr[0].equals("316") && arr.length >= 44 && !arr[3].equals("")) { // 下单用户 consumer ,一定要有orderId
+                    String[] arr = value.split("\t", -1); // 要加-1 保持长度不变
+                 //   System.out.println("长度:"+ arr.length);
+                    if (arr[0].equals("316") && arr.length >= 48 && !arr[3].equals("")) { // 下单用户 consumer ,一定要有orderId
                         String orderId = arr[3];
                         String templateId = arr[4];
                         String cartNo = arr[5];
@@ -121,11 +125,12 @@ public class RealTimeTask {
                         String sourceType = arr[19];// 来源方式打标说明
                         String flowType = arr[20]; // 引流平台打标说明
                         String pid = arr[22]; //一级代理
-                        String eid = arr[23]; //一级代理
+                        String eid = arr[23]; //二级代理
                         String ip = arr[24]; //用户ip
                         String carrier = arr[33]; // 运营商
                         String gdtNoWXClkId = arr[37]; //gd5点击id(非微信)
                         String vlionOrderId = arr[43]; // vlion订单id
+                        String aid = arr[47];   //账户id 新增
                         // 获取
 //                        SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd hh:mm:ss");
 //                        Date date = sdf.parse(sdf.format(time * 1000));
@@ -160,7 +165,8 @@ public class RealTimeTask {
                         if(carrier != null && !carrier.trim().equals("")) consumer.setCarrier(carrier);
                         if(gdtNoWXClkId != null && !gdtNoWXClkId.trim().equals("")) consumer.setGdtNoWXClkId(gdtNoWXClkId);
                         if(vlionOrderId != null && !vlionOrderId.trim().equals("")) consumer.setVlionOrderId(vlionOrderId);
-//                        System.out.println("输入的consumer:"+ consumer);
+                        if(aid != null && !aid.trim().equals("")) consumer.setAid(aid); //账户id 新增
+                        //System.out.println("输入的consumer:"+ consumer);
                         return Tuple2.of(arr[0], consumer);
                     } else if (arr[0].equals("317") && arr.length >= 19 && !arr[2].equals("")) { // 订单详情  order_details
                         //订单详情表，新增了这3个字段：
@@ -381,7 +387,7 @@ public class RealTimeTask {
             }
         });
         logTypeAndGENERIC.addSink(new MysqlSinkOneByOne()).name("mysql sink");
-//        logTypeAndGENERIC.print();
+      //    logTypeAndGENERIC.print("niaho");
 
 
         env.execute("telecom file to mysql ");

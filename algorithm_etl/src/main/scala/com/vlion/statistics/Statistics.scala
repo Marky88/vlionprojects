@@ -5,7 +5,7 @@ import java.util.Date
 
 import com.vlion.udfs.{MaxCountColUDAF, ParseBrandUDF, TimeUDAF, UserAgentUDF}
 import com.vlion.util.Constant
-import org.apache.spark.sql.SparkSession
+import org.apache.spark.sql.{DataFrame, SparkSession}
 
 
 /**
@@ -30,114 +30,128 @@ object Statistics {
         val calDays = 3
         summaryCalculateDay(spark,etlDate,calDays,Constant.appIds)
 
+        mediaLinkOcpx(spark,etlDate,Constant.appIds)
+
 //        val targetTable ="behavior.behavior_summary_day_20210816" //
 
         val targetTable = "behavior.behavior_summary_day_20210825"  // 添加3天的数据量
 
-        spark.sql(
+        //需要的
+       spark.sql(
             raw"""
-               |insert overwrite table $targetTable partition(etl_date = '${etlDate}')
-               |select
-               |    t1.if_imp,
-               |    t1.if_clk,
-               |    t1.app_id,
-               |    t1.id,
-               |    t1.adsolt_id,
-               |    t1.id_type,
-               |    t1.os,
-               |    t1.producer,
-               |    t1.model,
-               |    t1.osv,
-               |    t1.brand,
-               |    t1.adsolt_width,
-               |    t1.adsolt_height,
-               |    t1.carrier,
-               |    t1.network,
-               |    t1.city_id,
-               |    t1.pkg_name,
-               |    t1.adsolt_type,
-               |    t1.real_adsolt_width,
-               |    t1.real_adsolt_height,
-               |    t1.hour,
-               |    if(t1.longitude like '%.%',split(t1.longitude,'\\.')[0],t1.longitude) as longitude,
-               |    if(t1.latitude like '%.%',split(t1.latitude,'\\.')[0],t1.latitude) as latitude,
-               |    convert_ua(t1.ua) as ua,  -- 转换后的ua
-               |    t1.req_count,
-               |    t1.req_rate, -- 竞价请求次数占比
-               |    t1.req_avg_real_price, -- 竞价请求平均价格
-               |    t1.req_max_real_price, -- 竞价请求最高价格
-               |    t1.req_min_real_price,
-               |    t1.imp_cnt , -- 曝光次数
-               |    t1.imp_rate, -- 曝光次数占比
-               |    t1.imp_creative_count, -- 曝光创意种类次数
-               |    t1.imp_max_count_creative,  -- 曝光最多的创意
-               |    t1.imp_avg_real_price, -- 曝光平均价格
-               |    t1.imp_max_real_price,
-               |    t1.imp_min_real_price, -- 曝光最低价格
-               |    t1.clk_cnt,
-               |    t1.clk_rate,
-               |    t1.clk_creative_count, -- 点击创意种类次数
-               |    t1.clk_max_count_creative,  -- 点击最多的创意
-               |    t1.clk_first_seconds,
-               |    t1.clk_last_seconds,
-               |    t1.clk_min_interval,
-               |    t1.clk_max_interval,
-               |    t1.clk_avg_interval,
-               |    t2.req_count as req_count_2,
-               |    t2.req_rate as req_rate_2, -- 竞价请求次数占比
-               |    t2.req_avg_real_price as req_avg_real_price_2, -- 竞价请求平均价格
-               |    t2.req_max_real_price as req_max_real_price_2, -- 竞价请求最高价格
-               |    t2.req_min_real_price as req_min_real_price_2,
-               |    t2.req_app_count as req_app_count_2,
-               |    t2.imp_cnt as imp_cnt_2, -- 曝光次数
-               |    t2.imp_rate as imp_rate_2, -- 曝光次数占比
-               |    t2.imp_creative_count as imp_creative_count_2, -- 曝光创意种类次数
-               |    t2.imp_max_count_creative as imp_max_count_creative_2,  -- 曝光最多的创意
-               |    t2.imp_avg_real_price as imp_avg_real_price_2, -- 曝光平均价格
-               |    t2.imp_max_real_price as imp_max_real_price_2,
-               |    t2.imp_min_real_price as imp_min_real_price_2, -- 曝光最低价格
-               |    t2.imp_app_count as imp_app_count_2,
-               |    t2.clk_cnt as clk_cnt_2,
-               |    t2.clk_rate as clk_rate_2,
-               |    t2.clk_creative_count as clk_creative_count_2, -- 点击创意种类次数
-               |    t2.clk_max_count_creative as clk_max_count_creative_2,  -- 点击最多的创意
-               |    t2.clk_first_seconds as clk_first_seconds_2,
-               |    t2.clk_last_seconds as clk_last_seconds_2,
-               |    t2.clk_min_interval as clk_min_interval_2,
-               |    t2.clk_max_interval as clk_max_interval_2,
-               |    t2.clk_avg_interval as clk_avg_interval_2,
-               |    t2.clk_app_count as clk_app_count_2,
-               |    t3.req_count as req_count_3,
-               |    t3.req_rate as req_rate_3, -- 竞价请求次数占比
-               |    t3.req_avg_real_price as req_avg_real_price_3, -- 竞价请求平均价格
-               |    t3.req_max_real_price as req_max_real_price_3, -- 竞价请求最高价格
-               |    t3.req_min_real_price as req_min_real_price_3,
-               |    t3.imp_cnt as imp_cnt_3, -- 曝光次数
-               |    t3.imp_rate as imp_rate_3, -- 曝光次数占比
-               |    t3.imp_creative_count as imp_creative_count_3, -- 曝光创意种类次数
-               |    t3.imp_max_count_creative as imp_max_count_creative_3,  -- 曝光最多的创意
-               |    t3.imp_avg_real_price as imp_avg_real_price_3, -- 曝光平均价格
-               |    t3.imp_max_real_price as imp_max_real_price_3,
-               |    t3.imp_min_real_price as imp_min_real_price_3, -- 曝光最低价格
-               |    t3.clk_cnt as clk_cnt_3,
-               |    t3.clk_rate as clk_rate_3,
-               |    t3.clk_creative_count as clk_creative_count_3, -- 点击创意种类次数
-               |    t3.clk_max_count_creative as clk_max_count_creative_3  -- 点击最多的创意
-               |from
-               |    behavior_day_with_media t1
-               |left join
-               |    behavior_day_no_media t2
-               |on t1.id = t2.id
-               |left join
-               |    behavior_with_media_D3 t3
-               |on t1.id= t3.id and t1.adsolt_id = t3.adsolt_id and t1.app_id = t3.app_id
-               |""".stripMargin)
-
+                 |insert overwrite table $targetTable partition(etl_date = '${etlDate}')
+                 |select
+                 |    t1.if_imp,
+                 |    t1.if_clk,
+                 |    t1.app_id,
+                 |    t1.id,
+                 |    t1.adsolt_id,
+                 |    t1.id_type,
+                 |    t1.os,
+                 |    t1.producer,
+                 |    t1.model,
+                 |    t1.osv,
+                 |    t1.brand,
+                 |    t1.adsolt_width,
+                 |    t1.adsolt_height,
+                 |    t1.carrier,
+                 |    t1.network,
+                 |    t1.city_id,
+                 |    t1.pkg_name,
+                 |    t1.adsolt_type,
+                 |    t1.real_adsolt_width,
+                 |    t1.real_adsolt_height,
+                 |    t1.hour,
+                 |    if(t1.longitude like '%.%',split(t1.longitude,'\\.')[0],t1.longitude) as longitude,
+                 |    if(t1.latitude like '%.%',split(t1.latitude,'\\.')[0],t1.latitude) as latitude,
+                 |    convert_ua(t1.ua) as ua,  -- 转换后的ua
+                 |    t1.req_count,
+                 |    t1.req_rate, -- 竞价请求次数占比
+                 |    t1.req_avg_real_price, -- 竞价请求平均价格
+                 |    t1.req_max_real_price, -- 竞价请求最高价格
+                 |    t1.req_min_real_price,
+                 |    t1.imp_cnt , -- 曝光次数
+                 |    t1.imp_rate, -- 曝光次数占比
+                 |    t1.imp_creative_count, -- 曝光创意种类次数
+                 |    t1.imp_max_count_creative,  -- 曝光最多的创意
+                 |    t1.imp_avg_real_price, -- 曝光平均价格
+                 |    t1.imp_max_real_price,
+                 |    t1.imp_min_real_price, -- 曝光最低价格
+                 |    t1.clk_cnt,
+                 |    t1.clk_rate,
+                 |    t1.clk_creative_count, -- 点击创意种类次数
+                 |    t1.clk_max_count_creative,  -- 点击最多的创意
+                 |    t1.clk_first_seconds,
+                 |    t1.clk_last_seconds,
+                 |    t1.clk_min_interval,
+                 |    t1.clk_max_interval,
+                 |    t1.clk_avg_interval,
+                 |    t2.req_count as req_count_2,
+                 |    t2.req_rate as req_rate_2, -- 竞价请求次数占比
+                 |    t2.req_avg_real_price as req_avg_real_price_2, -- 竞价请求平均价格
+                 |    t2.req_max_real_price as req_max_real_price_2, -- 竞价请求最高价格
+                 |    t2.req_min_real_price as req_min_real_price_2,
+                 |    t2.req_app_count as req_app_count_2,
+                 |    t2.imp_cnt as imp_cnt_2, -- 曝光次数
+                 |    t2.imp_rate as imp_rate_2, -- 曝光次数占比
+                 |    t2.imp_creative_count as imp_creative_count_2, -- 曝光创意种类次数
+                 |    t2.imp_max_count_creative as imp_max_count_creative_2,  -- 曝光最多的创意
+                 |    t2.imp_avg_real_price as imp_avg_real_price_2, -- 曝光平均价格
+                 |    t2.imp_max_real_price as imp_max_real_price_2,
+                 |    t2.imp_min_real_price as imp_min_real_price_2, -- 曝光最低价格
+                 |    t2.imp_app_count as imp_app_count_2,
+                 |    t2.clk_cnt as clk_cnt_2,
+                 |    t2.clk_rate as clk_rate_2,
+                 |    t2.clk_creative_count as clk_creative_count_2, -- 点击创意种类次数
+                 |    t2.clk_max_count_creative as clk_max_count_creative_2,  -- 点击最多的创意
+                 |    t2.clk_first_seconds as clk_first_seconds_2,
+                 |    t2.clk_last_seconds as clk_last_seconds_2,
+                 |    t2.clk_min_interval as clk_min_interval_2,
+                 |    t2.clk_max_interval as clk_max_interval_2,
+                 |    t2.clk_avg_interval as clk_avg_interval_2,
+                 |    t2.clk_app_count as clk_app_count_2,
+                 |    t3.req_count as req_count_3,
+                 |    t3.req_rate as req_rate_3, -- 竞价请求次数占比
+                 |    t3.req_avg_real_price as req_avg_real_price_3, -- 竞价请求平均价格
+                 |    t3.req_max_real_price as req_max_real_price_3, -- 竞价请求最高价格
+                 |    t3.req_min_real_price as req_min_real_price_3,
+                 |    t3.imp_cnt as imp_cnt_3, -- 曝光次数
+                 |    t3.imp_rate as imp_rate_3, -- 曝光次数占比
+                 |    t3.imp_creative_count as imp_creative_count_3, -- 曝光创意种类次数
+                 |    t3.imp_max_count_creative as imp_max_count_creative_3,  -- 曝光最多的创意
+                 |    t3.imp_avg_real_price as imp_avg_real_price_3, -- 曝光平均价格
+                 |    t3.imp_max_real_price as imp_max_real_price_3,
+                 |    t3.imp_min_real_price as imp_min_real_price_3, -- 曝光最低价格
+                 |    t3.clk_cnt as clk_cnt_3,
+                 |    t3.clk_rate as clk_rate_3,
+                 |    t3.clk_creative_count as clk_creative_count_3, -- 点击创意种类次数
+                 |    t3.clk_max_count_creative as clk_max_count_creative_3,  -- 点击最多的创意
+                 |    t4.plan_id,       --计划id
+                 |    t4.create_id,     --创意id
+                 |    t4.admaster_id,   --广告主id
+                 |    t4.ocpx_tag,      --ocpx转换类型
+                 |    t4.if_new_enter,  --是否新登
+                 |    t4.if_live_awaken,  --是否拉活唤醒
+                 |    t4.if_pay,     --是否支付
+                 |    t4.if_mau      --是否MAU
+                 |from
+                 |    behavior_day_with_media t1
+                 |left join
+                 |    behavior_day_no_media t2
+                 |on t1.id = t2.id
+                 |left join
+                 |    behavior_with_media_D3 t3
+                 |on t1.id= t3.id and t1.adsolt_id = t3.adsolt_id and t1.app_id = t3.app_id
+                 |left join
+                 |    behavior_media_with_ocpx t4
+                 |on t1.id= t4.id and t1.adsolt_id = t4.adsolt_id and t1.app_id = t4.app_id
+                 |""".stripMargin)
     }
 
     private def summaryDayWithMedia(spark: SparkSession, etlDate: String,appIdArray:Array[String]): Unit = {
 
-        val appIdsStr = appIdArray.map(x => "'"+x+"'").mkString(",")
+        val appIdsStr: String = appIdArray.map(x => "'"+x+"'").mkString(",")
+        appIdsStr.foreach(print)
 
         spark.sql("set hive.exec.dynamic.partition.mode=nonstrict")
         spark.sql("set hive.exec.dynamic.partition =true")
@@ -396,7 +410,6 @@ object Statistics {
                |    ) t
                |) t3
                |on t1.app_id = t3.app_id and t1.id= t3.id and t1.adsolt_id = t3.adsolt_id
-               |
                |""".stripMargin).createOrReplaceTempView("behavior_day_with_media")
 
 
@@ -875,6 +888,68 @@ object Statistics {
                |on t1.app_id = t3.app_id and t1.id= t3.id and t1.adsolt_id = t3.adsolt_id
                |
                |""".stripMargin).createOrReplaceTempView("behavior_with_media_D"+calculateDays)
+
+
+    }
+
+    //新增ocpx关联
+    /*private*/ def  mediaLinkOcpx(spark: SparkSession, etlDate: String, appIdArray:Array[String]): Unit ={
+        val appIdsStr: String = appIdArray.map(x => "'"+x+"'").mkString(",")
+        spark.sql(
+            s"""
+               |select
+               |     t1.app_id,
+               |     t1.id,
+               |     t1.adsolt_id,
+               |     t2.plan_id,
+               |     t2.create_id,
+               |     t2.admaster_id,
+               |     t2.ocpx_tag,
+               |     t2.if_new_enter,
+               |     t2.if_live_awaken,
+               |     t2.if_pay,
+               |     t2.if_mau
+               |from
+               |(
+               |    select
+               |         case when os='1' then
+               |                   case when not ( imei is null or imei ='' or imei = '000000000000000') then if(length(imei) = 32,imei,md5(imei))
+               |                        when oaid is not null and oaid != '' and oaid !='00000000-0000-0000-0000-000000000000' then if(length(oaid) = 32,oaid,md5(oaid))
+               |                   else null end
+               |              when os ='2' then if(idfa is not null and idfa != '', if(length(idfa)=32,idfa,md5(idfa)) ,null)
+               |              else null end
+               |              as id,
+               |         app_id, --媒体id
+               |         adsolt_id, -- 广告位id
+               |         request_id   --请求id
+               |    from
+               |    ods.ods_media_req where etl_date='${etlDate}' and time is not null and time!='' and app_id in (${appIdsStr})
+               |) t1
+               |join
+               |(
+               |   select
+               |       media_id,
+               |       adslot_id,
+               |       case when os='1' then
+               |                 case when not ( imei is null or imei ='' or imei = '000000000000000') then if(length(imei) = 32,imei,md5(imei))
+               |                      when oaid is not null and oaid != '' and oaid !='00000000-0000-0000-0000-000000000000' then if(length(oaid) = 32,oaid,md5(oaid))
+               |                      else null end
+               |            when os ='2' then if(idfa is not null and idfa != '', if(length(idfa)=32,idfa,md5(idfa)) ,null)
+               |            else null end
+               |            as id,
+               |        plan_id,
+               |        creative_id as create_id,
+               |        admaster_id,
+               |       ocpx_tag,
+               |       case when ocpx_tag = 'alp_1' then 1 else 0 end as if_new_enter,
+               |       case when ocpx_tag = 'alp_2' then 1 else 0 end as if_live_awaken,
+               |       case when ocpx_tag = 'alp_3' then 1 else 0 end as if_pay,
+               |       case when ocpx_tag = 'alp_4' then 1 else 0 end as if_mau
+               |    from
+               |       ods.req_bid_imp_clk_55  where etl_date='${etlDate}' and time is not null and time!=''
+               |) t2
+               |on  t1.app_id=t2.media_id and t1.id=t2.id and t1.adsolt_id=t2.adslot_id
+               |""".stripMargin).createOrReplaceTempView("behavior_media_with_ocpx")
 
 
     }

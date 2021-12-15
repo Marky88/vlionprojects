@@ -54,6 +54,7 @@ public class MysqlSinkOneByOne extends RichSinkFunction<Tuple2<String, Object>> 
 
         switch (key) {
             case "316":
+               // System.out.println("开始bean..");
                 Consumer consumer = (Consumer) e;
                 StringBuilder updateSql = new StringBuilder("update consumer set ");
                 if (checkNotNull(consumer.getTemplateId())) {
@@ -122,19 +123,25 @@ public class MysqlSinkOneByOne extends RichSinkFunction<Tuple2<String, Object>> 
                 if(checkNotNull(consumer.getVlionOrderId())){
                     updateSql.append(" vlion_orderid='").append(consumer.getVlionOrderId()).append("',");
                 }
+                if (checkNotNull(consumer.getAid())){   //新增账户id
+                    updateSql.append(" aid='").append(consumer.getAid()).append("',");
+                }
 
                 updateSql.append(" where order_id='").append(consumer.getOrderId()).append("'");
                 String sql = updateSql.toString().replaceAll(", +where", " where");
-//                    System.out.println("sql: " + sql);
+                    System.out.println("sql: " + sql);
                 PreparedStatement psCustom = null;
                 try {
                     boolean execute = statement.execute(sql);
 
+                   // System.out.println("dazhe");
+
                     if (statement.getUpdateCount() == 0) { // 如果没有更新
+                      // System.out.println("开始插入..");
                         psCustom = conn.prepareStatement("insert into consumer(order_id,template_id," +
                                 "cart_no,buyer_name,mobile_phone,receiver_prov,receiver_city," +
-                            "receiver_district,receiver_adress,plan_id,creative_id,combo_type,is_choose_num,`time`,`date`, source_type,flow_type,pid,eid,ip,order_mobile_phone,carrier,vlion_orderid) " +
-                                "values(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)");
+                            "receiver_district,receiver_adress,plan_id,creative_id,combo_type,is_choose_num,`time`,`date`, source_type,flow_type,pid,eid,ip,order_mobile_phone,carrier,vlion_orderid,aid) " +
+                                "values(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)");
                         //插入
                         psCustom.setString(1, consumer.getOrderId());
                         psCustom.setString(2, consumer.getTemplateId());
@@ -159,9 +166,11 @@ public class MysqlSinkOneByOne extends RichSinkFunction<Tuple2<String, Object>> 
                         psCustom.setString(21,consumer.getOrderMobilePhone());
                         psCustom.setString(22,consumer.getCarrier());
                         psCustom.setString(23,consumer.getVlionOrderId());
+                        psCustom.setString(24,consumer.getAid());
 
                         psCustom.execute();
                     }
+                  //  System.out.println("略过if");
                 } catch (Exception e2) {
                     System.out.println(new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(new Date().getTime()) + " 报错:↓ " + consumer);
                     e2.printStackTrace();
