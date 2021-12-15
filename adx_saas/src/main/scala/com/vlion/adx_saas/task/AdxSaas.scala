@@ -7,7 +7,7 @@ import org.apache.spark.sql.SparkSession
 
 /**
  * @description:
- * @author: malichun
+ * @author: malichun --class com.vlion.adx_saas.task.AdxSaas
  * @time: 2021/7/8/0008 17:10
  *
  */
@@ -30,7 +30,9 @@ object AdxSaas {
         val etlHour = args(1)
 
         val sc = spark.sparkContext
-        OfflineStatistics.updateMysqlPkg(spark,etlDate,etlHour) // 先更新维护的mysql表的数据
+        OfflineStatistics.updateMysqlPkg(spark,etlDate,etlHour) // 先更新维护的mysql表pkg的数据
+        OfflineStatistics.updateMysqlAdsize(spark,etlDate,etlHour) //先更新维护mysql的Adsize表
+
         LoadMySql.readMysql // 加载mysql的数据
         LoadHive.loadHive(spark,etlDate,etlHour)
         OfflineStatistics.hourSummary(spark,etlDate,etlHour)
