@@ -19,7 +19,7 @@ object Smammu {
     spark.sparkContext.setLogLevel("WARN")
     ImportData.importMySQL(spark: SparkSession)
     Summary.sspSummary(spark: SparkSession,args: Array[String])
-   Summary.bidSummary(spark: SparkSession,args: Array[String])
+    Summary.bidSummary(spark: SparkSession,args: Array[String])
     spark.stop()
   }
 }
