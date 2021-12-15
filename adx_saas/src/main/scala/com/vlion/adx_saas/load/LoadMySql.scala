@@ -26,6 +26,9 @@ object LoadMySql {
         genreate2("style")
         genreate2("media")
         genreate2("pkg")
+        genreate2("tag")
+        genreate2("adsize")
+
     }
 
     private def generateMysqlTableView(mysqlTableName: String)(spark:SparkSession,url: String, user: String, password: String) = {

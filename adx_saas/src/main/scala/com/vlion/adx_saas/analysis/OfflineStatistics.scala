@@ -1,12 +1,14 @@
 package com.vlion.adx_saas.analysis
 
-import java.sql.DriverManager
+import java.sql.{Connection, DriverManager, PreparedStatement}
 import java.text.SimpleDateFormat
 import java.util.{Date, TimeZone}
 
-import com.vlion.adx_saas.jdbc.MySQL
+import com.vlion.adx_saas.jdbc.{ClickHouse, MySQL}
+import org.apache.spark.sql.types.{BooleanType, DataType, DecimalType, DoubleType, FloatType, IntegerType, LongType, StringType}
 import org.apache.spark.sql.{DataFrame, SparkSession}
 import org.apache.spark.storage.StorageLevel
+import ru.yandex.clickhouse.{ClickHouseConnection, ClickHouseDataSource}
 
 /**
  * @description:
@@ -16,7 +18,9 @@ import org.apache.spark.storage.StorageLevel
  */
 object OfflineStatistics {
 
+    val adxSaasStat = "adx_saas_stat"
     val mysqlStateTableName = "stat"
+
 
     /**
      * 更新myql 的pkg
@@ -51,6 +55,50 @@ object OfflineStatistics {
             })
     }
 
+
+    def updateMysqlAdsize(implicit spark:SparkSession,etlDate:String,etlHour:String):Unit={
+        spark.sql(
+            s"""
+               |select
+               |  distinct concat_ws('*',width,height) as size
+               |from
+               |  ods.adx_saas_media_resp
+               |where  etl_date = '${etlDate}' and etl_hour = '${etlHour}'
+               |  and  width is not null  and  width != ""
+               |  and  height is not null and  height != ""
+               |""".stripMargin
+        ).rdd
+            .repartition(2)
+            .map(r => r.getAs[String]("size"))
+            .foreachPartition{ iter =>
+                var conn: Connection = null
+                var pstmt: PreparedStatement = null
+
+                try {
+                    Class.forName(MySQL.driver)
+                    conn = DriverManager.getConnection(MySQL.url, MySQL.user, MySQL.password)
+                    pstmt = conn.prepareStatement("insert into adsize(name,del) values(?,'no') ON DUPLICATE key update name = values(name)")
+
+
+                    iter.foldLeft(pstmt){(pstmt,line) =>
+                        println("line:"+line)
+                        pstmt.setString(1,line)
+                        pstmt.execute()
+                        pstmt
+
+                    }
+
+                } catch {
+                    case e => e.printStackTrace()
+                } finally {
+                    if(pstmt != null) pstmt.close()
+                    if (conn != null) conn.close()
+                }
+
+            }
+
+    }
+
     def hourSummary(implicit spark: SparkSession, etlDate: String, etlHour: String): Unit = {
 
         //        val sdfDay = new SimpleDateFormat("yyyy-MM-dd")
@@ -69,7 +117,10 @@ object OfflineStatistics {
               |time is not null and
               |dsp_id is not null and
               |dsp_id != '' and
-              |pkg_id is not null and media_id is not null""".stripMargin)
+              |pkg_id is not null and media_id is not null   -- and
+              |--tag_id is not null and tag_id !='' and
+              |--size is not null and size  != ''
+              |""".stripMargin)
             )
             .withColumn("update_time", lit(s"${etlDate} ${etlHour}:00:00"))
             .withColumn("del", lit("no")).repartition(500)
@@ -107,7 +158,9 @@ object OfflineStatistics {
                |    max(dsp_req_timeout) as dsp_req_timeout,
                |    max(dsp_req_parse_error) as dsp_req_parse_error,
                |    max(dsp_req_invalid_ad) as dsp_req_invalid_ad,
-               |    max(dsp_req_no_bid) as dsp_req_no_bid
+               |    max(dsp_req_no_bid) as dsp_req_no_bid,
+               |    tag_id,
+               |    size as adsize_id
                |from
                |    resDF
                |    where posid_id  rlike '^[\\d-\\.]+$$'
@@ -118,10 +171,12 @@ object OfflineStatistics {
                |    and platform_id rlike '^[\\d-\\.]+$$'
                |    and style_id rlike '^[\\d-\\.]+$$'
                |    and mlevel_id rlike '^[\\d-\\.]+$$'
+               |   -- and tag_id rlike '^[\\d-\\.]+$$'
+               |   -- and size rlike '^[\\d-\\.]+$$'
                |group by
-               |    time,hour,time_format,dsp_id,target_id,media_id,posid_id,pkg_id,country_id,platform_id,style_id,mlevel_id,del,update_time
+               |    time,hour,time_format,dsp_id,target_id,media_id,posid_id,pkg_id,country_id,platform_id,style_id,mlevel_id,del,update_time,tag_id,size
                |""".stripMargin)
-//            .coalesce(5)
+            .repartition(1000)
             .persist(StorageLevel.MEMORY_AND_DISK)
 
 
@@ -137,8 +192,12 @@ object OfflineStatistics {
 //        insertUpdateMysql(spark, resDF, 12, mysqlStateTableName)
 
         // 导入到impala
+        resDF2.show(10)
         resDF2.coalesce(1).createOrReplaceTempView("resDF2")
+        
 
+        //insert overwrite table test.adx_saas_stat_test
+        //--insert overwrite table dm.adx_saas_stat
         // 导入到impala/hive表中
         spark.sql(
             s"""
@@ -173,11 +232,62 @@ object OfflineStatistics {
                |dsp_req_parse_error,
                |dsp_req_invalid_ad,
                |dsp_req_no_bid,
-               |del
+               |del,
+               |tag_id,
+               |adsize_id
                |from resDF2
                |""".stripMargin)
 
 
+
+
+/*        //写入clickhouse
+        //格式字段类型需要变化
+        val adx_saas_statDF = spark.sql(
+            s"""
+               |select
+               |time,
+               |hour,
+               |time_format,
+               |dsp_id,
+               |target_id,
+               |media_id,
+               |posid_id,
+               |pkg_id,
+               |country_id,
+               |platform_id,
+               |style_id,
+               |mlevel_id,
+               |ssp_req,
+               |dsp_req,
+               |dsp_fill_req,
+               |dsp_win,
+               |ssp_win,
+               |cast(dsp_floor as Decimal(18,10)) as dsp_floor,
+               |cast(ssp_floor as Decimal(18,10)) as ssp_floor,
+               |cast(dsp_win_price as Decimal(18,10)) as dsp_win_price,
+               |imp,
+               |clk,
+               |cast(revenue as Decimal(18,10)) as revenue,
+               |cast(cost as Decimal(18,10)) as cost,
+               |dsp_req_timeout,
+               |dsp_req_parse_error,
+               |dsp_req_invalid_ad,
+               |dsp_req_no_bid,
+               |del,
+               |tag_id,
+               |adsize_id,
+               |"${etlDate}" as etl_date,
+               |"${etlHour}" as etl_hour,
+               |'${etlDate} ${etlHour}:00:00' as etl_date_time
+               |from resDF2
+               |""".stripMargin)
+
+        insertClickhouse(adx_saas_statDF,ClickHouse.database,adxSaasStat)*/
+        
+
+
+//导入到mysql 注释掉
         try{
             // 导入到mysql
             resDF2
@@ -235,6 +345,76 @@ object OfflineStatistics {
             pstmt.close()
             conn.close()
         })
+    }
+
+
+    def insertClickhouse(dataframe:DataFrame,db:String,target_table:String)={
+        val columns = dataframe.columns
+        val coluName: String = columns.mkString(",")
+        val nums = columns.map(_ => "?").mkString(",")
+
+        val sql = s"insert into ${db}.${target_table} (${coluName}) values (${nums})"
+        //   println(sql)
+
+        val schema = dataframe.schema
+        val fields = schema.fields
+
+        dataframe.rdd.foreachPartition { iter =>
+            var conn: ClickHouseConnection = null
+            var pstmt: PreparedStatement = null
+
+            try {
+                Class.forName(ClickHouse.driver)
+                val source = new ClickHouseDataSource(s"jdbc:clickhouse://${ClickHouse.host}:${ClickHouse.port}")
+                conn = source.getConnection(ClickHouse.user, ClickHouse.password)
+                pstmt = conn.prepareStatement(sql)
+
+
+                var count = 0
+                iter.foreach { row =>
+                    fields.foreach { field =>
+                        val index = schema.fieldIndex(field.name)
+                        var value = row.get(index)
+                        if (null == value) value = defaultNullValue(field.dataType)
+                        pstmt.setObject(index + 1, value)
+                    }
+
+                    pstmt.addBatch()
+                    count += 1
+                    if (count > 1000){
+                        pstmt.executeBatch()
+                        count = 0
+                    }
+
+                }
+
+                pstmt.executeBatch()
+
+            } catch {
+                case e =>e.printStackTrace()
+            }
+
+            pstmt.close()
+            conn.close()
+
+        }
+
+        dataframe.show(1)
+
+    }
+
+
+    def defaultNullValue(dataType:DataType):Any={
+        dataType match {
+            case DecimalType() => 0D
+            case FloatType => 0F
+            case DoubleType => 0.0
+            case IntegerType => 0
+            case LongType => 0L
+            case StringType => null
+            case BooleanType => false
+            case _ => null
+        }
     }
 
 
@@ -361,6 +541,7 @@ object OfflineStatistics {
         resDF.persist(StorageLevel.MEMORY_AND_DISK)
 
         resDF.show(false)
+
         resDF
             .coalesce(5)
             .write.mode("append")
@@ -373,4 +554,8 @@ object OfflineStatistics {
             .save()
 
     }
+
+
+
+
 }

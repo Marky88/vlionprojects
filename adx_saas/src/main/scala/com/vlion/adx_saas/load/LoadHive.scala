@@ -42,7 +42,9 @@ object LoadHive {
                |    null as dsp_req_timeout,
                |    null as dsp_req_parse_error,
                |    null as dsp_req_invalid_ad,
-               |    null as dsp_req_no_bid
+               |    null as dsp_req_no_bid,
+               |    -1 as tag_id,
+               |    -1 as size
                |from
                |     ods.adx_saas_media_req t1
                |left join
@@ -97,7 +99,9 @@ object LoadHive {
                |    sum(dsp_req_timeout) as dsp_req_timeout,
                |    sum(dsp_req_parse_error) as dsp_req_parse_error,
                |    sum(dsp_req_invalid_ad) as dsp_req_invalid_ad,
-               |    sum(dsp_req_no_bid) as dsp_req_no_bid
+               |    sum(dsp_req_no_bid) as dsp_req_no_bid,
+               |    if(t7.id is null or t7.id = '', -1,t7.id ) as tag_id,  --mysql的tag表中id
+               |    -1 as size   --尺寸id
                |from
                |(
                |    select
@@ -118,7 +122,8 @@ object LoadHive {
                |        count(if(staus_code='201',1,null)) as dsp_req_timeout, -- 不去重
                |        count(if(staus_code='202',1,null)) as dsp_req_parse_error, -- 不去重
                |        count(if(staus_code='203',1,null)) as dsp_req_invalid_ad,
-               |        count(if(staus_code='206',1,null)) as dsp_req_no_bid
+               |        count(if(staus_code='206',1,null)) as dsp_req_no_bid,
+               |        max(tag_id) as tag_id
                |    from
                |        ods.adx_saas_dsp_req
                |    where etl_date='${etlDate}' and etl_hour = '$etlHour'
@@ -135,6 +140,8 @@ object LoadHive {
                |on t1.style = t5.jsonkey
                |left join media t6
                |on t1.mlevel = t6.id
+               |left join tag t7
+               |on t1.tag_id = t7.name
                |group by hour,dsp_id,target_id,
                |    if(t1.media_id    is null or t1.media_id     ='','-1',t1.media_id     )  ,
                |    if(t1.posid_id    is null or t1.posid_id     ='','-1',t1.posid_id     )  ,
@@ -142,7 +149,8 @@ object LoadHive {
                |    if(t3.id  is null or t3.id   ='','-1',t3.id   ) ,
                |    if(t4.id is null or t4.id  ='','-1',t4.id  ) ,
                |    if(t5.id    is null or t5.id     ='','-1',t5.id     ) ,
-               |    if(t6.mlevel_id   is null or t6.mlevel_id    ='','-1',t6.mlevel_id    )
+               |    if(t6.mlevel_id   is null or t6.mlevel_id    ='','-1',t6.mlevel_id    ),
+               |    if(t7.id is null or t7.id = '', -1,t7.id )
                |""".stripMargin)
 
         val mediaRespDF = spark.sql(
@@ -173,7 +181,9 @@ object LoadHive {
                |    null as dsp_req_timeout,
                |    null as dsp_req_parse_error,
                |    null as dsp_req_invalid_ad,
-               |    null as dsp_req_no_bid
+               |    null as dsp_req_no_bid,
+               |    if(t7.id is null or t7.id = '', -1,t7.id ) as tag_id, --tag表中的id
+               |    if(t8.id is null or t8.id = '', -1, t8.id ) as size   --adsize表中的id
                |from
                |(
                |    select
@@ -189,7 +199,9 @@ object LoadHive {
                |        max(adsolt_type) as style,  -- 对应style_id
                |        max(app_id) as mlevel, -- 对应mlevel_id
                |        1 as dsp_win,
-               |        max(dsp_bid) as dsp_win_price
+               |        max(dsp_bid) as dsp_win_price,
+               |        max(tag_id) as tag_id,
+               |        max(concat_ws('*',width,height)) as size
                |    from
                |        ods.adx_saas_media_resp
                |    where etl_date='${etlDate}' and etl_hour = '$etlHour'
@@ -200,11 +212,15 @@ object LoadHive {
                |left join country t3
                |    on t1.country = t3.jsonkey
                |left join platform t4
-               |on t1.platform = t4.jsonkey
+               |    on t1.platform = t4.jsonkey
                |left join style t5
-               |on t1.style = t5.jsonkey
+               |    on t1.style = t5.jsonkey
                |left join media t6
-               |on t1.mlevel = t6.id
+               |    on t1.mlevel = t6.id
+               |left join tag t7
+               |    on t1.tag_id = t7.name
+               |left join adsize t8
+               |    on t1.size = t8.name
                |group by hour,dsp_id,target_id,
                |    if(t1.media_id    is null or t1.media_id     ='','-1',t1.media_id     )  ,
                |    if(t1.posid_id    is null or t1.posid_id     ='','-1',t1.posid_id     )  ,
@@ -212,8 +228,9 @@ object LoadHive {
                |    if(t3.id  is null or t3.id   ='','-1',t3.id   ) ,
                |    if(t4.id is null or t4.id  ='','-1',t4.id  ) ,
                |    if(t5.id    is null or t5.id     ='','-1',t5.id     ) ,
-               |    if(t6.mlevel_id   is null or t6.mlevel_id    ='','-1',t6.mlevel_id    )
-               |
+               |    if(t6.mlevel_id   is null or t6.mlevel_id    ='','-1',t6.mlevel_id    ),
+               |    if(t7.id is null or t7.id = '', -1,t7.id ),
+               |    if(t8.id is null or t8.id = '', -1, t8.id )
                |""".stripMargin)
 
 
@@ -245,7 +262,9 @@ object LoadHive {
                |    null as dsp_req_timeout,
                |    null as dsp_req_parse_error,
                |    null as dsp_req_invalid_ad,
-               |    null as dsp_req_no_bid
+               |    null as dsp_req_no_bid,
+               |    if(t7.id is null or t7.id = '', -1,t7.id ) as tag_id, --tag表中的id
+               |    -1 as size
                |from
                |(
                |    select
@@ -262,7 +281,8 @@ object LoadHive {
                |        max(app_id) as mlevel, -- 对应mlevel_id
                |        1 as imp, -- 每个曝光1条
                |        max(dsp_final_price) as revenue, -- 只有1个,成交价----------------
-               |        max(ssp_final_price) as cost -- 只有1个
+               |        max(ssp_final_price) as cost, -- 只有1个
+               |        max(tag_id) as tag_id
                |    from
                |    ods.adx_saas_imp
                |    where etl_date='${etlDate}' and etl_hour = '$etlHour'
@@ -274,11 +294,13 @@ object LoadHive {
                |left join country t3
                |    on t1.country = t3.jsonkey
                |left join platform t4
-               |on t1.platform = t4.jsonkey
+               |    on t1.platform = t4.jsonkey
                |left join style t5
-               |on t1.style = t5.jsonkey
+               |    on t1.style = t5.jsonkey
                |left join media t6
-               |on t1.mlevel = t6.id
+               |    on t1.mlevel = t6.id
+               |left join  tag t7
+               |    on t1.tag_id = t7.name
                |group by hour,dsp_id,target_id,
                |    if(t1.media_id    is null or t1.media_id     ='','-1',t1.media_id     )  ,
                |    if(t1.posid_id    is null or t1.posid_id     ='','-1',t1.posid_id     )  ,
@@ -286,7 +308,8 @@ object LoadHive {
                |    if(t3.id  is null or t3.id   ='','-1',t3.id   ) ,
                |    if(t4.id is null or t4.id  ='','-1',t4.id  ) ,
                |    if(t5.id    is null or t5.id     ='','-1',t5.id     ) ,
-               |    if(t6.mlevel_id   is null or t6.mlevel_id    ='','-1',t6.mlevel_id    )
+               |    if(t6.mlevel_id   is null or t6.mlevel_id    ='','-1',t6.mlevel_id    ),
+               |    if(t7.id is null or t7.id = '', -1,t7.id )
                |
                |""".stripMargin)
 
@@ -319,7 +342,9 @@ object LoadHive {
                |    null as dsp_req_timeout,
                |    null as dsp_req_parse_error,
                |    null as dsp_req_invalid_ad,
-               |    null as dsp_req_no_bid
+               |    null as dsp_req_no_bid,
+               |    if(t7.id is null or t7.id = '', -1,t7.id ) as tag_id,
+               |    -1 as size
                |from
                |(
                |    select
@@ -334,7 +359,8 @@ object LoadHive {
                |    max(os) as platform, -- 对应platform_id
                |    max(adsolt_type) as style,  -- 对应style_id
                |    max(app_id) as mlevel, -- 对应mlevel_id
-               |    1 as clk
+               |    1 as clk,
+               |    max(tag_id) as tag_id
                |    from
                |    ods.adx_saas_clk
                |    where etl_date='${etlDate}' and etl_hour = '$etlHour'
@@ -346,11 +372,13 @@ object LoadHive {
                |left join country t3
                |    on t1.country = t3.jsonkey
                |left join platform t4
-               |on t1.platform = t4.jsonkey
+               |    on t1.platform = t4.jsonkey
                |left join style t5
-               |on t1.style = t5.jsonkey
+               |    on t1.style = t5.jsonkey
                |left join media t6
-               |on t1.mlevel = t6.id
+               |    on t1.mlevel = t6.id
+               |left join  tag t7
+               |    on t1.tag_id = t7.name
                |group by hour,dsp_id,target_id,
                |    if(t1.media_id    is null or t1.media_id     ='','-1',t1.media_id     )  ,
                |    if(t1.posid_id    is null or t1.posid_id     ='','-1',t1.posid_id     )  ,
@@ -358,8 +386,8 @@ object LoadHive {
                |    if(t3.id  is null or t3.id   ='','-1',t3.id   ) ,
                |    if(t4.id is null or t4.id  ='','-1',t4.id  ) ,
                |    if(t5.id    is null or t5.id     ='','-1',t5.id     ) ,
-               |    if(t6.mlevel_id   is null or t6.mlevel_id    ='','-1',t6.mlevel_id    )
-               |
+               |    if(t6.mlevel_id   is null or t6.mlevel_id    ='','-1',t6.mlevel_id    ),
+               |    if(t7.id is null or t7.id = '', -1,t7.id )
                |""".stripMargin)
 
 
@@ -391,7 +419,9 @@ object LoadHive {
                |    null as dsp_req_timeout,
                |    null as dsp_req_parse_error,
                |    null as dsp_req_invalid_ad,
-               |    null as dsp_req_no_bid
+               |    null as dsp_req_no_bid,
+               |    if(t7.id is null or t7.id = '', -1,t7.id ) as tag_id,
+               |    -1 as size
                |from
                |(
                |    select
@@ -406,7 +436,8 @@ object LoadHive {
                |        max(os) as platform, -- 对应platform_id
                |        max(adsolt_type) as style,  -- 对应style_id
                |        max(app_id) as mlevel, -- 对应mlevel_id
-               |        1 as ssp_win
+               |        1 as ssp_win,
+               |        max(tag_id) as tag_id
                |    from
                |        ods.adx_saas_dsp_win
                |    where etl_date='${etlDate}' and etl_hour = '$etlHour'
@@ -418,11 +449,13 @@ object LoadHive {
                |left join country t3
                |    on t1.country = t3.jsonkey
                |left join platform t4
-               |on t1.platform = t4.jsonkey
+               |    on t1.platform = t4.jsonkey
                |left join style t5
-               |on t1.style = t5.jsonkey
+               |    on t1.style = t5.jsonkey
                |left join media t6
-               |on t1.mlevel = t6.id
+               |    on t1.mlevel = t6.id
+               |left join tag t7
+               |   on t1.tag_id = t7.name
                |group by hour,dsp_id,target_id,
                |    if(t1.media_id    is null or t1.media_id     ='','-1',t1.media_id     )  ,
                |    if(t1.posid_id    is null or t1.posid_id     ='','-1',t1.posid_id     )  ,
@@ -430,8 +463,8 @@ object LoadHive {
                |    if(t3.id  is null or t3.id   ='','-1',t3.id   ) ,
                |    if(t4.id is null or t4.id  ='','-1',t4.id  ) ,
                |    if(t5.id    is null or t5.id     ='','-1',t5.id     ) ,
-               |    if(t6.mlevel_id   is null or t6.mlevel_id    ='','-1',t6.mlevel_id    )
-               |
+               |    if(t6.mlevel_id   is null or t6.mlevel_id    ='','-1',t6.mlevel_id    ),
+               |    if(t7.id is null or t7.id = '', -1,t7.id )
                |""".stripMargin)
 
         val unionDF = dspReqDF union mediaRespDF union impDF union clkDF union dspWinDF
@@ -467,7 +500,9 @@ object LoadHive {
                |    max(dsp_req_timeout) as dsp_req_timeout,
                |    max(dsp_req_parse_error) as dsp_req_parse_error,
                |    max(dsp_req_invalid_ad) as dsp_req_invalid_ad,
-               |    max(dsp_req_no_bid)  as dsp_req_no_bid
+               |    max(dsp_req_no_bid)  as dsp_req_no_bid,
+               |    tag_id,
+               |    size
                |from
                |   u1
                |group by
@@ -477,12 +512,33 @@ object LoadHive {
                |    country_id,
                |    platform_id,
                |    style_id,
-               |    mlevel_id
+               |    mlevel_id,
+               |    tag_id,
+               |    size
                |
                |
                |""".stripMargin).createOrReplaceTempView("uniontable")
 
+
+  /*      val frame = spark.sql(
+            s"""
+               |select
+               | *
+               |from
+               |uniontable
+               |
+               |""".stripMargin
+        )
+
+        frame.show(5)
+
+        frame.coalesce(1).write.option("header","true").csv("/test/demo/input/adx.csv")*/
+
+
+
     }
+
+
 
     def loadHive2(implicit spark: SparkSession, etlDate: String, etlHour: String): Unit = {
 
@@ -737,7 +793,7 @@ object LoadHive {
               | u1
               |group by
               | request_id,dsp_id -- 每个请求id+ dsp_id唯一
-              |""".stripMargin).createOrReplaceTempView("union_table")
+              |""".stripMargin).repartition(1000).createOrReplaceTempView("union_table")
     }
 
 
