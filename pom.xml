@@ -19,13 +19,14 @@
         <module>smammu</module>
         <module>mammu</module>
         <module>zebra</module>
+        <module>algorithm_dsp</module>
     </modules>
     <packaging>pom</packaging>
     <properties>
         <scala.version>2.11.8</scala.version>
         <spark.version>2.2.1</spark.version>
         <spark_scala.version>2.11</spark_scala.version>
-        <hadoop.version>3.0.0</hadoop.version>
+        <hadoop.version>3.0.0</hadoop.version>   <!--集群 3.0.0-->  <!--本地 2.7.5 -->
         <hive.version>2.1.1</hive.version>
     </properties>
     <repositories>
